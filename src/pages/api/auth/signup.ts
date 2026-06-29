@@ -37,5 +37,6 @@ export const POST: APIRoute = async (ctx) => {
     return ctx.redirect('/login?error=' + encodeURIComponent(signInErr.message));
   }
 
-  return ctx.redirect('/dev/harness');
+  // P1 onboarding starts at the profile step.
+  return ctx.redirect('/account/profile');
 };

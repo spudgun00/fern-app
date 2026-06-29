@@ -1,0 +1,34 @@
+---
+// P1 ends here: the intake-start landing. The two-lane questionnaire itself is
+// P2 and is intentionally not built. We only confirm the user arrives here with
+// state id_verified and a mapped corePatientId (the P1 success outcome).
+import { createAdminClient } from '../lib/supabase/admin';
+import { ensureAccount, getJourney } from '../lib/accounts';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+const journey = await getJourney(admin, account.id);
+
+// Gate: ID verification is required before any clinical step.
+if (journey?.state !== 'id_verified') return Astro.redirect('/account/verify');
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Intake &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Intake</h1>
+    <p>You are verified and ready to begin. The intake questionnaire arrives in P2.</p>
+    <ul>
+      <li>journey state: <code>{journey?.state}</code></li>
+      <li>core_patient_id: <code>{account.core_patient_id ?? '(none)'}</code></li>
+    </ul>
+    <p><a href="/logout">Log out</a></p>
+  </body>
+</html>

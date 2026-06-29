@@ -1,0 +1,74 @@
+---
+// P1 profile capture. Collects demographic identity (sent to the clinical core,
+// not the app DB) and the GP info-sharing decision. Unstyled plumbing; the
+// design system arrives with patient-facing screens in a later phase.
+import { createAdminClient } from '../../lib/supabase/admin';
+import { ensureAccount, getGpSharing, getJourney } from '../../lib/accounts';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+const journey = await getJourney(admin, account.id);
+
+// Already past ID? Send the user on rather than back to the start of onboarding.
+if (journey && journey.state !== 'registered') return Astro.redirect('/account/verify');
+
+const existingGp = await getGpSharing(admin, account.id);
+const error = Astro.url.searchParams.get('error');
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Your profile &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Your profile</h1>
+    <p>Step 1 of 2. Signed in as {user.email}. <a href="/logout">Log out</a></p>
+    {error && <p style="color: red">{error}</p>}
+
+    <form method="POST" action="/api/account/profile">
+      <h2>About you</h2>
+      <p><label>Full name <input type="text" name="fullName" required /></label></p>
+      <p><label>Date of birth <input type="date" name="dateOfBirth" required /></label></p>
+      <p><label>Contact phone <input type="tel" name="contact" required /></label></p>
+
+      <h2>Your GP</h2>
+      <p><label>GP name or practice <input type="text" name="gpPractice" /></label></p>
+
+      <fieldset>
+        <legend>Sharing information with your GP</legend>
+        <p>
+          <label>
+            <input type="radio" name="gpDecision" value="consent" required />
+            I consent to Fern sharing relevant information with my GP
+          </label>
+        </p>
+        <p>
+          <label>
+            <input type="radio" name="gpDecision" value="refused" />
+            I do not consent (a recorded risk note is required)
+          </label>
+        </p>
+        <p>
+          <label>
+            Risk note (required if you do not consent)<br />
+            <textarea name="riskNote" rows="3" cols="50"></textarea>
+          </label>
+        </p>
+      </fieldset>
+
+      <button type="submit">Save and continue to ID check</button>
+    </form>
+    {
+      existingGp && (
+        <p>
+          Previously recorded GP-sharing decision: <code>{existingGp.decision}</code>
+        </p>
+      )
+    }
+  </body>
+</html>

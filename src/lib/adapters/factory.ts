@@ -2,9 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AppEnv } from '../env';
 import type { ClinicalCoreAdapter } from './clinical-core';
 import type { DispensingAdapter } from './dispensing';
+import type { IdentityAdapter } from './identity';
 import { MockCore } from './mock-core';
 import { MockCoreB } from './mock-core-b';
 import { MockDispensing } from './mock-dispensing';
+import { MockIdentity } from './mock-identity';
+import { StripeIdentity } from './stripe-identity';
 
 // Selects the implementation purely from the env flag. The rest of the app
 // (routes, harness, tests) only ever talks to the interface, so swapping the
@@ -24,5 +27,15 @@ export function getDispensing(env: AppEnv, db: SupabaseClient): DispensingAdapte
     case 'mock':
     default:
       return new MockDispensing(db);
+  }
+}
+
+export function getIdentity(env: AppEnv, db: SupabaseClient): IdentityAdapter {
+  switch (env.IDENTITY_IMPL) {
+    case 'stripe':
+      return new StripeIdentity(env.STRIPE_SECRET_KEY ?? '');
+    case 'mock':
+    default:
+      return new MockIdentity(db);
   }
 }

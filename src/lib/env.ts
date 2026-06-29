@@ -11,6 +11,11 @@ export interface AppEnv {
   SUPABASE_SERVICE_KEY: string;
   CORE_IMPL: string;
   DISPENSING_IMPL: string;
+  IDENTITY_IMPL: string;
+  // Stripe Identity (test mode in P1). Required ONLY when IDENTITY_IMPL=stripe;
+  // server-only, never PUBLIC_, never in a client bundle.
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
 }
 
 const REQUIRED = [
@@ -36,11 +41,29 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     }
   }
 
+  const identityImpl = String(get('IDENTITY_IMPL') ?? 'mock');
+  const stripeSecretKey = get('STRIPE_SECRET_KEY');
+  const stripeWebhookSecret = get('STRIPE_WEBHOOK_SECRET');
+
+  // The Stripe keys are required ONLY when the Stripe identity impl is selected;
+  // keeping them out of REQUIRED lets mock dev + tests run without them.
+  if (identityImpl === 'stripe') {
+    for (const [name, value] of [
+      ['STRIPE_SECRET_KEY', stripeSecretKey],
+      ['STRIPE_WEBHOOK_SECRET', stripeWebhookSecret],
+    ] as const) {
+      if (!value) throw new Error(`Missing required env var: ${name} (IDENTITY_IMPL=stripe)`);
+    }
+  }
+
   return {
     PUBLIC_SUPABASE_URL: String(get('PUBLIC_SUPABASE_URL')),
     PUBLIC_SUPABASE_ANON_KEY: String(get('PUBLIC_SUPABASE_ANON_KEY')),
     SUPABASE_SERVICE_KEY: String(get('SUPABASE_SERVICE_KEY')),
     CORE_IMPL: String(get('CORE_IMPL') ?? 'mock'),
     DISPENSING_IMPL: String(get('DISPENSING_IMPL') ?? 'mock'),
+    IDENTITY_IMPL: identityImpl,
+    STRIPE_SECRET_KEY: stripeSecretKey != null ? String(stripeSecretKey) : undefined,
+    STRIPE_WEBHOOK_SECRET: stripeWebhookSecret != null ? String(stripeWebhookSecret) : undefined,
   };
 }

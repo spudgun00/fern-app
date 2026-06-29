@@ -1,0 +1,44 @@
+---
+// P1 ID-verification start. Step 2 of 2. Starting the check moves the journey
+// registered -> id_pending and sends the user to the provider's hosted flow
+// (Stripe Identity test mode) or the in-app mock flow, depending on
+// IDENTITY_IMPL. Unstyled plumbing.
+import { createAdminClient } from '../../lib/supabase/admin';
+import { ensureAccount, getJourney } from '../../lib/accounts';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+const journey = await getJourney(admin, account.id);
+
+// Must complete the profile (which maps the core patient) before ID.
+if (!account.core_patient_id) return Astro.redirect('/account/profile');
+// Already verified -> on to intake.
+if (journey && journey.state !== 'registered' && journey.state !== 'id_pending') {
+  return Astro.redirect('/intake');
+}
+
+const error = Astro.url.searchParams.get('error');
+const pending = journey?.state === 'id_pending';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Verify your identity &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Verify your identity</h1>
+    <p>Step 2 of 2. ID verification is required before any clinical step.</p>
+    {error && <p style="color: red">{error}</p>}
+    {pending && <p>A verification check is already in progress. You can start a new one below.</p>}
+
+    <form method="POST" action="/api/account/verify/start">
+      <button type="submit">Start ID check</button>
+    </form>
+    <p>Provider: <code>{env.IDENTITY_IMPL}</code> (test mode).</p>
+  </body>
+</html>

@@ -11,8 +11,12 @@
   // Astro session store (not used for auth; auth uses Supabase cookies). Bound
   // explicitly so deploys stay non-interactive.
   "kv_namespaces": [{ "binding": "SESSION", "id": "3d1fc53e174843149f04bfb08aa9134e" }],
+  // Non-secret impl flags only. IDENTITY_IMPL selects the IdentityAdapter; flip
+  // to "stripe" once STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET are set via
+  // `wrangler secret put` (they are secrets, NEVER committed here).
   "vars": {
     "CORE_IMPL": "mock",
-    "DISPENSING_IMPL": "mock"
+    "DISPENSING_IMPL": "mock",
+    "IDENTITY_IMPL": "mock"
   }
 }

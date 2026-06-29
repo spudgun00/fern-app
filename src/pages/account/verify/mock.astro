@@ -1,0 +1,28 @@
+---
+// In-app stand-in for the provider's hosted verification flow, used only when
+// IDENTITY_IMPL=mock. It plays the role of Stripe's hosted page: the user
+// "completes" the check here. No documents are uploaded or stored; this is a
+// dev affordance. The real Stripe test-mode flow replaces this page entirely.
+const { user } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const session = Astro.url.searchParams.get('session') ?? '';
+const ret = Astro.url.searchParams.get('return') ?? '/account/verify/complete';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mock ID check &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Mock ID check (dev only)</h1>
+    <p>Stand-in for the provider hosted flow. No documents are uploaded or stored.</p>
+    <form method="POST" action="/api/account/verify/mock-confirm">
+      <input type="hidden" name="session" value={session} />
+      <input type="hidden" name="return" value={ret} />
+      <button type="submit">Complete verification (test)</button>
+    </form>
+  </body>
+</html>

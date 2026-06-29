@@ -1,0 +1,57 @@
+---
+// Return page from the identity provider (and the mock flow). Polls the current
+// provider status and finalises: when verified, advances id_pending ->
+// id_verified. For Stripe the webhook is the authoritative path; this poll is a
+// belt-and-braces refresh and is idempotent with it.
+import { createAdminClient } from '../../../lib/supabase/admin';
+import { getIdentity } from '../../../lib/adapters/factory';
+import { ensureAccount, getJourney, getLatestIdVerification } from '../../../lib/accounts';
+import { finaliseVerification } from '../../../lib/verification';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+
+const record = await getLatestIdVerification(admin, account.id);
+let status: string | null = null;
+let problem: string | null = null;
+
+if (record) {
+  try {
+    const identity = getIdentity(env, admin);
+    const live = await identity.getVerificationStatus(record.provider_ref);
+    status = await finaliseVerification(admin, account.id, record.provider_ref, live);
+  } catch (err) {
+    problem = err instanceof Error ? err.message : String(err);
+  }
+}
+
+const journey = await getJourney(admin, account.id);
+const verified = journey?.state === 'id_verified';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ID check &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>ID check</h1>
+    {problem && <p style="color: red">{problem}</p>}
+    <p>Provider status: <code>{status ?? '(none)'}</code></p>
+    <p>Journey state: <code>{journey?.state ?? '(none)'}</code></p>
+    {
+      verified ? (
+        <p>Your identity is verified. <a href="/intake">Continue to intake</a>.</p>
+      ) : (
+        <p>
+          Not verified yet. Verification can take a moment; reload this page, or{' '}
+          <a href="/account/verify">start a new check</a>.
+        </p>
+      )
+    }
+  </body>
+</html>

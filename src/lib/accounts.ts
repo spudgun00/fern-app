@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { transition } from './journey/machine';
 import type { JourneyState, Lane } from './journey/states';
 
 // App-DB helpers. NON-CLINICAL state only. All access is server-side via the
@@ -30,6 +31,19 @@ export async function getAccountByUser(
     .eq('auth_user_id', authUserId)
     .maybeSingle();
   if (error) throw new Error(`getAccountByUser: ${error.message}`);
+  return (data as Account) ?? null;
+}
+
+export async function getAccountById(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<Account | null> {
+  const { data, error } = await db
+    .from('account')
+    .select('*')
+    .eq('id', accountId)
+    .maybeSingle();
+  if (error) throw new Error(`getAccountById: ${error.message}`);
   return (data as Account) ?? null;
 }
 
@@ -103,4 +117,136 @@ export async function setCorePatientId(
     .update({ core_patient_id: corePatientId })
     .eq('id', accountId);
   if (error) throw new Error(`setCorePatientId: ${error.message}`);
+}
+
+// Reads the current journey, applies the legal transition (throws on an illegal
+// one), and persists it. The single place P1 routes change journey state.
+export async function advanceJourney(
+  db: SupabaseClient,
+  accountId: string,
+  to: JourneyState,
+  lane: Lane | null = null,
+): Promise<JourneyState> {
+  const journey = await getJourney(db, accountId);
+  if (!journey) throw new Error(`advanceJourney: no journey for account ${accountId}`);
+  const next = transition(journey.state, to); // throws IllegalTransitionError if illegal
+  await setJourney(db, accountId, next, lane ?? journey.lane);
+  return next;
+}
+
+// ---------------------------------------------------------------------------
+// GP info-sharing consent (HARD LINE): a patient either consents to GP sharing
+// or makes an explicit refusal that MUST carry a recorded risk note. This is
+// administrative consent state, not Article 9 clinical content (P1 captures no
+// clinical data), so it lives in the app DB.
+// ---------------------------------------------------------------------------
+export type GpSharingDecision = 'consent' | 'refused';
+
+export interface GpSharing {
+  id: string;
+  account_id: string;
+  decision: GpSharingDecision;
+  risk_note: string | null;
+  recorded_at: string;
+}
+
+export async function recordGpSharing(
+  db: SupabaseClient,
+  accountId: string,
+  decision: GpSharingDecision,
+  riskNote: string | null,
+): Promise<void> {
+  const note = (riskNote ?? '').trim();
+  if (decision === 'refused' && note === '') {
+    // Enforced server-side, not only in the form: a refusal without a recorded
+    // risk note is rejected (hard line).
+    throw new Error('recordGpSharing: a GP-sharing refusal requires a recorded risk note');
+  }
+  const { error } = await db.from('gp_sharing').insert({
+    account_id: accountId,
+    decision,
+    risk_note: decision === 'refused' ? note : null,
+  });
+  if (error) throw new Error(`recordGpSharing: ${error.message}`);
+}
+
+export async function getGpSharing(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<GpSharing | null> {
+  const { data, error } = await db
+    .from('gp_sharing')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('recorded_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getGpSharing: ${error.message}`);
+  return (data as GpSharing) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// ID verification (HARD LINE): the app DB stores only the provider session
+// pointer (provider_ref) and a coarse status. NO document images, NO extracted
+// ID PII (name / DOB / selfie) ever land here; that data stays with the
+// provider behind the IdentityAdapter.
+// ---------------------------------------------------------------------------
+export interface IdVerification {
+  id: string;
+  account_id: string;
+  provider_ref: string;
+  status: string;
+  created_at: string;
+}
+
+export async function recordIdVerification(
+  db: SupabaseClient,
+  accountId: string,
+  providerRef: string,
+  status: string,
+): Promise<void> {
+  const { error } = await db
+    .from('id_verification')
+    .insert({ account_id: accountId, provider_ref: providerRef, status });
+  if (error) throw new Error(`recordIdVerification: ${error.message}`);
+}
+
+export async function setIdVerificationStatus(
+  db: SupabaseClient,
+  providerRef: string,
+  status: string,
+): Promise<void> {
+  const { error } = await db
+    .from('id_verification')
+    .update({ status })
+    .eq('provider_ref', providerRef);
+  if (error) throw new Error(`setIdVerificationStatus: ${error.message}`);
+}
+
+export async function getLatestIdVerification(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<IdVerification | null> {
+  const { data, error } = await db
+    .from('id_verification')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestIdVerification: ${error.message}`);
+  return (data as IdVerification) ?? null;
+}
+
+export async function getIdVerificationByRef(
+  db: SupabaseClient,
+  providerRef: string,
+): Promise<IdVerification | null> {
+  const { data, error } = await db
+    .from('id_verification')
+    .select('*')
+    .eq('provider_ref', providerRef)
+    .maybeSingle();
+  if (error) throw new Error(`getIdVerificationByRef: ${error.message}`);
+  return (data as IdVerification) ?? null;
 }
