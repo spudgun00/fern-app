@@ -1,0 +1,28 @@
+---
+// Unstyled dev landing. P0 is internal plumbing; patient-facing design arrives later.
+const { user } = Astro.locals;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fern app (P0)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Fern patient zone &mdash; P0</h1>
+    <p>Foundation and adapter spine. Internal plumbing only.</p>
+    {
+      user ? (
+        <p>
+          Signed in as {user.email}. <a href="/dev/harness">Dev harness</a> &middot;{' '}
+          <a href="/logout">Log out</a>
+        </p>
+      ) : (
+        <p>
+          <a href="/signup">Sign up</a> &middot; <a href="/login">Log in</a>
+        </p>
+      )
+    }
+  </body>
+</html>

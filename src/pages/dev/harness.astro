@@ -1,0 +1,42 @@
+---
+// Logged-in-only dev harness. Shows current persisted journey state and the
+// account's core_patient_id, with a button to run the end-to-end scenario.
+import { createAdminClient } from '../../lib/supabase/admin';
+import { ensureAccount, getJourney } from '../../lib/accounts';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+const journey = await getJourney(admin, account.id);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dev harness &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Dev harness</h1>
+    <p>Signed in as {user.email}. <a href="/logout">Log out</a></p>
+
+    <h2>Current persisted state</h2>
+    <ul>
+      <li>account id: <code>{account.id}</code></li>
+      <li>role: <code>{account.role}</code></li>
+      <li>journey state: <code>{journey?.state ?? '(none)'}</code></li>
+      <li>lane: <code>{journey?.lane ?? '(none)'}</code></li>
+      <li>core_patient_id: <code>{account.core_patient_id ?? '(none)'}</code></li>
+    </ul>
+
+    <form method="POST" action="/api/dev/run-scenario">
+      <button type="submit">Run scenario</button>
+    </form>
+    <p>
+      Runs server-side through the adapters and the state machine. Re-running
+      resets the journey to <code>registered</code> and runs fresh (idempotent).
+    </p>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+{
+  // Fern patient zone app worker. Supabase clients need Node compat on the
+  // Workers runtime, hence the nodejs_compat flag (see build spec P0 note).
+  // Secrets (PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY)
+  // are set via `wrangler secret put` and are NEVER committed here. Locally they
+  // are read from .dev.vars (gitignored). Only non-secret impl flags live below.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fern-app",
+  "compatibility_date": "2026-04-15",
+  "compatibility_flags": ["nodejs_compat"],
+  // Astro session store (not used for auth; auth uses Supabase cookies). Bound
+  // explicitly so deploys stay non-interactive.
+  "kv_namespaces": [{ "binding": "SESSION", "id": "3d1fc53e174843149f04bfb08aa9134e" }],
+  "vars": {
+    "CORE_IMPL": "mock",
+    "DISPENSING_IMPL": "mock"
+  }
+}

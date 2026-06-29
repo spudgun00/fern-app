@@ -1,1 +1,21 @@
+# dependencies
+node_modules/
+
+# build output (also contains a copy of .dev.vars — never commit)
+dist/
+.astro/
+
+# local secrets
 .dev.vars
+.dev.vars.*
+
+# wrangler / cloudflare local state
+.wrangler/
+
+# supabase local state
+supabase/.temp/
+supabase/.branches/
+
+# misc
+.DS_Store
+*.log

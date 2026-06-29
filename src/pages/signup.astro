@@ -1,0 +1,27 @@
+---
+// Minimal unstyled sign-up. P0 plumbing only.
+if (Astro.locals.user) return Astro.redirect('/dev/harness');
+const error = Astro.url.searchParams.get('error');
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sign up &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Sign up</h1>
+    {error && <p style="color: red">{error}</p>}
+    <form method="POST" action="/api/auth/signup">
+      <p>
+        <label>Email <input type="email" name="email" required /></label>
+      </p>
+      <p>
+        <label>Password <input type="password" name="password" required minlength="6" /></label>
+      </p>
+      <button type="submit">Create account</button>
+    </form>
+    <p>Already have an account? <a href="/login">Log in</a></p>
+  </body>
+</html>

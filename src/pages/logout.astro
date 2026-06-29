@@ -1,0 +1,5 @@
+---
+// Sign out and clear the session cookies, then return to login.
+await Astro.locals.supabase.auth.signOut();
+return Astro.redirect('/login');
+---
