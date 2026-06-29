@@ -11,6 +11,8 @@ import {
   setJourney,
 } from './accounts';
 import { finaliseVerification } from './verification';
+import { submitIntake } from './intake/submit';
+import type { IntakeAnswers } from './intake/routing';
 import { transition } from './journey/machine';
 import type { JourneyState } from './journey/states';
 
@@ -50,12 +52,13 @@ export async function runHarnessScenario(
 
   // Idempotent reset.
   await admin.from('queue_item').delete().eq('account_id', account.id);
+  await admin.from('intake_ref').delete().eq('account_id', account.id);
   await admin.from('id_verification').delete().eq('account_id', account.id);
   await admin.from('gp_sharing').delete().eq('account_id', account.id);
   await admin.from('mock_identity_verification').delete().eq('account_id', account.id);
   await setCorePatientId(admin, account.id, null);
   await setJourney(admin, account.id, 'registered', null);
-  push('reset', 'journey reset to registered; queue_item / id_verification / gp_sharing / mock_identity cleared; core_patient_id cleared');
+  push('reset', 'journey reset to registered; queue_item / intake_ref / id_verification / gp_sharing / mock_identity cleared; core_patient_id cleared');
 
   const core = getClinicalCore(env, admin);
   push('factory', `clinical core impl selected via CORE_IMPL=${env.CORE_IMPL}`);
@@ -117,34 +120,39 @@ export async function runHarnessScenario(
     };
   }
 
-  // 4. Advance through intake to the review queue (proves the rest of the spine).
-  for (const next of ['intake_started', 'intake_submitted'] as JourneyState[]) {
-    state = transition(state, next);
-    await setJourney(admin, account.id, state, null);
-    push('transition', `${state}`);
-  }
+  // 4. Submit the intake through the SAME path the app uses: routeIntake decides
+  //    the lane, submitIntake writes the answers to the core, advances the
+  //    journey id_verified -> intake_started -> intake_submitted -> in_review_queue
+  //    and creates the queue_item POINTER. A clear, continuing picture with no
+  //    flags routes to the fast lane.
+  const harnessAnswers: IntakeAnswers = {
+    treatmentHistory: 'continuing',
+    symptoms: ['hot_flushes', 'night_sweats'],
+    monthsSinceLastPeriod: 18,
+    bpSystolic: 124,
+    bpDiastolic: 78,
+    clotHistory: false,
+    breastCancerHistory: false,
+    liverDisease: false,
+    unexplainedBleeding: false,
+    currentPregnancy: false,
+    suspectedClotSymptoms: false,
+    undiagnosedBreastLump: false,
+  };
+  const { intakeId, decision } = await submitIntake(
+    admin,
+    core,
+    account.id,
+    corePatientId,
+    'menopause',
+    harnessAnswers,
+  );
+  push('submitIntake', `intake ${intakeId} written to the core; routed -> ${decision.outcome} (lane ${decision.lane ?? 'none'})`);
 
-  // 5. Save a mock intake via the adapter, create a queue_item POINTER, advance
-  //    to in_review_queue on the fast lane.
-  const intakeId = await core.saveIntake(corePatientId, {
-    condition: 'menopause',
-    lane: 'fast',
-    answers: { repeat: true, redFlags: false },
-  });
-  push('saveIntake', `intake ${intakeId} written to the core via saveIntake`);
-
-  const { error: qErr } = await admin.from('queue_item').insert({
-    account_id: account.id,
-    intake_id: intakeId,
-    lane: 'fast',
-    status: 'pending',
-  });
-  if (qErr) throw new Error(`queue_item insert: ${qErr.message}`);
-  push('queue_item', `pointer created (intake_id ${intakeId}, lane fast) — pointer only, no clinical content`);
-
-  state = transition(state, 'in_review_queue');
-  await setJourney(admin, account.id, state, 'fast');
-  push('transition', `${state} (lane fast)`);
+  // 5. Reflect the persisted journey after routing (in_review_queue on the fast lane).
+  journey = await getJourney(admin, account.id);
+  state = (journey?.state ?? state) as JourneyState;
+  push('transition', `${state} (lane ${journey?.lane ?? 'none'})`);
 
   // 6. Read the intake back via the adapter.
   const readBack = await core.getIntake(intakeId);

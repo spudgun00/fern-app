@@ -1,19 +1,45 @@
 ---
-// P1 ends here: the intake-start landing. The two-lane questionnaire itself is
-// P2 and is intentionally not built. We only confirm the user arrives here with
-// state id_verified and a mapped corePatientId (the P1 success outcome).
+// P2 intake: the two-lane menopause/HRT questionnaire and its routing result.
+// Renders the questionnaire when the patient is verified and has not yet
+// submitted; otherwise shows the deterministic routing outcome (the lane, or a
+// red-flag signpost). Unstyled plumbing; the design system arrives later.
+//
+// Describe-never-diagnose: this screen states the NEXT STEP and a plain reason,
+// never a diagnosis or a treatment recommendation.
 import { createAdminClient } from '../lib/supabase/admin';
-import { ensureAccount, getJourney } from '../lib/accounts';
+import { getClinicalCore } from '../lib/adapters/factory';
+import { ensureAccount, getJourney, getLatestIntakeRef } from '../lib/accounts';
+import { SYMPTOM_OPTIONS, SCREEN_QUESTIONS } from '../lib/intake/questionnaire';
+import type { RoutingDecision } from '../lib/intake/routing';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
 
 const admin = createAdminClient(env);
 const account = await ensureAccount(admin, user.id);
-const journey = await getJourney(admin, account.id);
 
-// Gate: ID verification is required before any clinical step.
-if (journey?.state !== 'id_verified') return Astro.redirect('/account/verify');
+// Must have completed the profile (maps the core patient) before intake.
+if (!account.core_patient_id) return Astro.redirect('/account/profile');
+
+const journey = await getJourney(admin, account.id);
+const ref = await getLatestIntakeRef(admin, account.id);
+
+// Not yet submitted: the ID gate must be passed to start the questionnaire.
+if (!ref && journey?.state !== 'id_verified') return Astro.redirect('/account/verify');
+
+// Already submitted: read the routing decision back from the CORE for display
+// (the app DB holds only the pointer + outcome). Reading clinical content
+// server-side for display is allowed; it is never copied app-side.
+let decision: RoutingDecision | null = null;
+if (ref) {
+  const core = getClinicalCore(env, admin);
+  const intake = await core.getIntake(ref.intake_id);
+  decision = (intake?.payload.routing as RoutingDecision | undefined) ?? null;
+}
+
+const error = Astro.url.searchParams.get('error');
+const riskQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'risk');
+const redFlagQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'redFlag');
 ---
 
 <html lang="en">
@@ -23,12 +49,140 @@ if (journey?.state !== 'id_verified') return Astro.redirect('/account/verify');
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
   <body>
-    <h1>Intake</h1>
-    <p>You are verified and ready to begin. The intake questionnaire arrives in P2.</p>
-    <ul>
-      <li>journey state: <code>{journey?.state}</code></li>
-      <li>core_patient_id: <code>{account.core_patient_id ?? '(none)'}</code></li>
-    </ul>
-    <p><a href="/logout">Log out</a></p>
+    <h1>Menopause and HRT intake</h1>
+    <p>Signed in as {user.email}. <a href="/logout">Log out</a></p>
+    {error && <p style="color: red">{error}</p>}
+
+    {
+      ref && decision ? (
+        <section>
+          <h2>Your next step</h2>
+          {decision.outcome === 'fast' && (
+            <p>
+              Your answers have gone to our clinician review queue. A clinician
+              will review them and decide the next step. Nothing has been
+              prescribed: a clinician makes that decision.
+            </p>
+          )}
+          {decision.outcome === 'full' && (
+            <p>
+              Based on your answers, the safer next step is an assessed
+              consultation with a clinician. Booking arrives in a later step.
+            </p>
+          )}
+          {decision.outcome === 'stop' && decision.signpost && (
+            <p style="color: #b00">
+              We cannot continue your request here right now. {decision.signpost.message}{' '}
+              (Contact: <strong>{decision.signpost.service}</strong>.)
+            </p>
+          )}
+          <p>
+            Routing outcome: <code>{decision.outcome}</code> &middot; lane:{' '}
+            <code>{decision.lane ?? '(none)'}</code> &middot; journey state:{' '}
+            <code>{journey?.state}</code>
+          </p>
+          <ul>
+            {decision.reasons.map((r) => (
+              <li>{r}</li>
+            ))}
+          </ul>
+        </section>
+      ) : (
+        <form method="POST" action="/api/intake/submit">
+          <p>
+            This questionnaire describes your situation so we can route you to the
+            right next step. It does not give a diagnosis or recommend a
+            treatment.
+          </p>
+
+          <fieldset>
+            <legend>Have you used this HRT before?</legend>
+            <p>
+              <label>
+                <input type="radio" name="treatmentHistory" value="continuing" required />
+                I am continuing or restarting HRT I have used before
+              </label>
+            </p>
+            <p>
+              <label>
+                <input type="radio" name="treatmentHistory" value="initiation" />
+                I am starting HRT for the first time
+              </label>
+            </p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Which symptoms are you experiencing?</legend>
+            {SYMPTOM_OPTIONS.map((s) => (
+              <p>
+                <label>
+                  <input type="checkbox" name="symptoms" value={s.id} />
+                  {s.label}
+                </label>
+              </p>
+            ))}
+          </fieldset>
+
+          <fieldset>
+            <legend>History and blood pressure</legend>
+            <p>
+              <label>
+                Months since your last period (leave blank if unsure)
+                <br />
+                <input type="number" name="monthsSinceLastPeriod" min="0" />
+              </label>
+            </p>
+            <p>
+              <label>
+                Most recent blood pressure &mdash; systolic (top number)
+                <br />
+                <input type="number" name="bpSystolic" min="0" />
+              </label>
+            </p>
+            <p>
+              <label>
+                Most recent blood pressure &mdash; diastolic (bottom number)
+                <br />
+                <input type="number" name="bpDiastolic" min="0" />
+              </label>
+            </p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Your medical history</legend>
+            {riskQuestions.map((q) => (
+              <p>
+                {q.label}
+                <br />
+                <label>
+                  <input type="radio" name={q.name} value="yes" required /> Yes
+                </label>{' '}
+                <label>
+                  <input type="radio" name={q.name} value="no" /> No
+                </label>
+              </p>
+            ))}
+          </fieldset>
+
+          <fieldset>
+            <legend>Safety check</legend>
+            {redFlagQuestions.map((q) => (
+              <p>
+                {q.label}
+                <br />
+                <label>
+                  <input type="radio" name={q.name} value="yes" required /> Yes
+                </label>{' '}
+                <label>
+                  <input type="radio" name={q.name} value="no" /> No
+                </label>
+              </p>
+            ))}
+          </fieldset>
+
+          <button type="submit">Submit intake</button>
+        </form>
+      )
+    }
   </body>
 </html>

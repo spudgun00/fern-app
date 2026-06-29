@@ -27,7 +27,10 @@ export interface CorePatient {
 export interface IntakePayload {
   // The structured clinical intake. Article 9 content — lives ONLY in the core.
   condition: string;
-  lane: Lane;
+  // The routed lane, or null for a red-flag stop (no lane). The deterministic
+  // routing decision (outcome + reasons) rides along via the index signature as
+  // `routing`, kept with the clinical record rather than in the app DB.
+  lane: Lane | null;
   answers: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -43,7 +46,7 @@ export interface CoreIntake {
 export interface IntakeSummary {
   intakeId: string;
   corePatientId: string;
-  lane: Lane;
+  lane: Lane | null;
   status: string;
   createdAt: string;
 }

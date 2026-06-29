@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { transition } from './journey/machine';
 import type { JourneyState, Lane } from './journey/states';
+import type { IntakeOutcome } from './intake/routing';
 
 // App-DB helpers. NON-CLINICAL state only. All access is server-side via the
 // service_role admin client.
@@ -249,4 +250,47 @@ export async function getIdVerificationByRef(
     .maybeSingle();
   if (error) throw new Error(`getIdVerificationByRef: ${error.message}`);
   return (data as IdVerification) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Intake routing pointer (P2). The app DB records ONLY a pointer to the core
+// intake plus the routing OUTCOME (which lane, or a stop) and a status. The
+// structured ANSWERS and the routing REASONS are Article 9 and live ONLY in the
+// clinical core behind the ClinicalCoreAdapter; they are never copied here.
+// ---------------------------------------------------------------------------
+export interface IntakeRef {
+  id: string;
+  account_id: string;
+  intake_id: string;
+  outcome: IntakeOutcome;
+  status: string;
+  created_at: string;
+}
+
+export async function recordIntakeRef(
+  db: SupabaseClient,
+  accountId: string,
+  intakeId: string,
+  outcome: IntakeOutcome,
+  status: string = 'submitted',
+): Promise<void> {
+  const { error } = await db
+    .from('intake_ref')
+    .insert({ account_id: accountId, intake_id: intakeId, outcome, status });
+  if (error) throw new Error(`recordIntakeRef: ${error.message}`);
+}
+
+export async function getLatestIntakeRef(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<IntakeRef | null> {
+  const { data, error } = await db
+    .from('intake_ref')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestIntakeRef: ${error.message}`);
+  return (data as IntakeRef) ?? null;
 }
