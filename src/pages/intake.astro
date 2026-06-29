@@ -65,11 +65,13 @@ const redFlagQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'redFlag');
             </p>
           )}
           {(journey?.state === 'rx_issued' ||
-            journey?.state === 'approved') && (
+            journey?.state === 'approved' ||
+            journey?.state === 'dispensing' ||
+            journey?.state === 'delivered') && (
             <p style="color: #060">
               A clinician has reviewed your intake and approved treatment. Your
-              prescription has been issued and will move to dispensing. (Dispensing
-              status arrives in a later step.)
+              prescription has been issued and sent to the pharmacy.{' '}
+              <a href="/treatment">View your treatment and dispensing status &rarr;</a>
             </p>
           )}
           {journey?.state === 'escalated' && (

@@ -10,19 +10,20 @@ live only here. Authoritative spec: `docs/fern-patient-zone-build-spec.md` — r
 it before building. Build is phased (P0…P7); **build one phase, prove its success
 test on the deployed URL, then stop**. Do not build ahead of a passing test.
 
-Status: **P3 built** (clinician console: review queue + async approve + script
-issue — **the fast lane closes**), deployed at https://fern-app.jimgill.workers.dev.
-P0 (foundation + adapter spine + mocks), P1 (account + ID verification) and P2
-(two-lane intake + deterministic routing) done. Success tests A (`npm test`, 43
-passed) and B pass. P3's test proved on the deployed URL: a fast-lane intake
-appears in the clinician queue; **approve** issues a (mock) script and advances
-the patient to `rx_issued`; **escalate** moves the patient into the full lane
-(`escalated`, lane `full`, awaiting P6 booking); **refuse** terminates at
-`refused` with a recorded reason and a patient-facing signpost; and a patient
-role attempting `/api/clinician/decide` is blocked (no path reaches `rx_issued`
-without a clinician action). P1's Test C (real Stripe Identity test-mode path) is
-still wired-but-unclosed (needs the Stripe test secrets set, see below). P4+ not
-started.
+Status: **P4 built** (script to CloudRx + patient dispensing status — **dispensing
+closes**), deployed at https://fern-app.jimgill.workers.dev. P0 (foundation +
+adapter spine + mocks), P1 (account + ID verification), P2 (two-lane intake +
+deterministic routing) and P3 (clinician console — fast lane closes) done. Success
+tests A (`npm test`, 48 passed) and B pass. P4's test proved on the deployed URL:
+on **approve** the issued script flows to the (mock) CloudRx pharmacy and the
+patient advances `rx_issued -> dispensing`; the patient `/treatment` view shows
+the script + status **Sent to the pharmacy**; stepping the mock dispatch
+(submitted -> dispatched -> delivered) reflects on the patient view with a
+tracking trail and advances `dispensing -> delivered`; and a patient lodges a
+**repeat request** that enters the clinician review queue as a fresh pending
+fast-lane item (no auto-script). P1's Test C (real Stripe Identity test-mode path)
+is still wired-but-unclosed (needs the Stripe test secrets set, see below). P5+
+not started.
 
 ## Stack
 
@@ -166,32 +167,65 @@ Leave `IDENTITY_IMPL=mock` to keep the no-keys mock onboarding walk working.
 
 ## P3 done (clinician console — fast lane closes)
 
-- **Added:** the clinician console (fast-lane review queue + the prescribing
-  action) on top of the P2 spine. No new journey state, no new app-DB table.
-- **Key pattern:** ALL clinician decisions go through ONE function,
-  `decideClinicianAction` in `src/lib/clinician/decide.ts` — the hard line lives
-  there, in code: it asserts a **clinician** actor (defence-in-depth beyond the
-  route's role gate), a **pending fast-lane item at `in_review_queue`**, and a
-  **recorded reason**; writes the rationale to the CORE (`createConsultNote`,
-  Article 9 reasoning stays in the core); then **approve** -> `issuePrescription`
-  + `in_review_queue -> approved -> rx_issued`; **escalate** -> `escalated`
-  (lane `full`, awaiting P6 booking — escalate stops at `escalated`, the
-  `escalated -> consult_booked` booking is P6); **refuse** -> `refused` (terminal)
-  + patient-facing signpost. `issuePrescription` is called from the approve
-  branch only.
-- **Surfaces (role-gated):** `/clinician` queue (pending fast-lane items, oldest
-  first; flags read from the core for display), `/clinician/intake/[id]` detail +
-  action bar, `/api/clinician/decide`. Patient `/intake` shows the post-decision
-  state. A dev-only **Become clinician/patient** toggle on `/dev/harness`
-  (`/api/dev/set-role`) makes the two-actor walk runnable without seeding a
-  clinician in the DB (mock-only test affordance, not product).
-- **Boundary:** `queue_item` gained decision **pointers only** — `decided_by`
-  (clinician account, no real identity), `decided_at`, `note_ref` + `rx_ref`
-  (core pointers). The rationale and the script live ONLY in the core.
-- **Proven on the live URL:** fast-lane intake -> appears in the clinician queue;
-  approve -> `rx_issued` (+ script in the core); escalate -> `escalated`/full;
-  refuse -> `refused` + patient signpost; a patient role hitting
-  `/api/clinician/decide` is bounced to `/` (no decision). `npm test`: 43 passed.
+- **Added:** the clinician console — the review queue, the intake detail read
+  from the core, and the action bar (**Approve + issue script** | **Escalate to
+  consult** | **Refuse + signpost**). This closes the FAST lane end to end
+  (intake -> clinician decision -> script).
+- **Key pattern:** decision orchestration lives in ONE function,
+  `decideClinicianAction` (`src/lib/clinician/decide.ts`). The transition to
+  `rx_issued` is reachable ONLY through a clinician **Approve** action
+  (`issuePrescription` is called from that branch alone; the journey machine
+  independently bars `rx_issued` from any non-decision state).
+- **Hard line, proven by four tests:** a non-clinician actor is rejected; a
+  reason is required; no empty script is issued (approve needs an item); no
+  double-decide on the same item.
+- **Audit:** every decision records clinician + reason + timestamp on
+  `queue_item` (decision-audit columns `decided_by` / `decided_at` / `note_ref`
+  / `rx_ref` added in the P3 migration; pointers only — the rationale and script
+  live in the core).
+- **Three outcomes proven on the live URL:** approve -> `rx_issued`; escalate ->
+  full lane (`escalated`, lane `full`); refuse -> terminal `refused` with a
+  GP / NHS 111 signpost. A patient role hitting `/api/clinician/decide` is
+  bounced with no decision. `npm test`: 43 passed.
+
+## P4 done (script to CloudRx + patient dispensing status — dispensing closes)
+
+- **Added:** the issued script flows to dispensing (CloudRx, mocked behind the
+  `DispensingAdapter`) and the patient `/treatment` view shows the script +
+  status + delivery tracking, plus a repeat-request entry. Closes **dispensing**
+  on top of the P3 fast lane.
+- **Key pattern:** decision and transmission stay SEPARATE functions.
+  `decideClinicianAction` is unchanged — it is the clinical decision and still
+  stops at `rx_issued`. The new `dispenseIssuedScript`
+  (`src/lib/dispensing/dispense.ts`) is the ONE place a script is transmitted to
+  the pharmacy: it advances `rx_issued -> dispensing` (the journey machine bars
+  this from any other state, so a script cannot dispense without first being
+  clinician-issued). The `/api/clinician/decide` route COMPOSES them: on approve
+  it calls `dispenseIssuedScript` after the decision. The same dispensing
+  function serves P6's full lane later (consult_done -> rx_issued -> dispensing).
+- **Mock status walk:** `MockDispensing.advanceStatus` (a mock-ONLY affordance,
+  NOT on the adapter interface — the real CloudRx pushes its own status) steps
+  submitted -> dispatched -> delivered and appends tracking events. The dev route
+  `/api/dev/advance-dispense` drives it; when it reaches delivered it advances
+  `dispensing -> delivered`. Surfaced as a clearly-fenced dev control on
+  `/treatment` (hidden once delivered or for any non-mock impl).
+- **Repeat:** `lodgeRepeatRequest` writes a `createRepeatRequest` to the core and
+  inserts a fresh pending fast-lane `queue_item` (via the shared
+  `insertFastQueueItem`, also now used by intake) so the repeat ENTERS the
+  clinician queue. The hard line holds — a repeat issues no script on its own; a
+  clinician still decides. The re-approval loop + membership / no-charge tiering
+  are P5 (the repeat enters the queue now; its decision wiring lands with money).
+- **Boundary:** the new app-DB `dispense_ref` table (P4 migration) is POINTERS +
+  coarse status ONLY (`rx_ref`, `dispense_id`, `submitted|dispatched|delivered`).
+  The script + the pharmacy record live behind the `DispensingAdapter` (the
+  `mock_dispense` stand-in this phase), never in the app DB. A denylist test
+  asserts the column set never grows to clinical detail. No new journey state
+  (the machine already carried `rx_issued -> dispensing -> delivered`).
+- **Proven on the live URL:** approve -> the script reaches the mock pharmacy and
+  the patient sits at `dispensing` with status **Sent to the pharmacy**; advancing
+  the mock -> `dispatched` -> `delivered` reflects on `/treatment` (tracking trail
+  + `dispensing -> delivered`); a lodged repeat appears as a new pending item in
+  the clinician queue. `npm test`: 48 passed.
 
 ## Verifying
 

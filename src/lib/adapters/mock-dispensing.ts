@@ -57,4 +57,36 @@ export class MockDispensing implements DispensingAdapter {
       events: tracking.events ?? [],
     };
   }
+
+  // MOCK-ONLY test affordance (NOT part of the DispensingAdapter interface). The
+  // real CloudRx pushes status changes via its own API/webhook; here a dev step
+  // advances the mock through submitted -> dispatched -> delivered and appends a
+  // tracking event, so the patient status view is walkable end to end. Returns
+  // the new status (unchanged once delivered, the terminal mock state).
+  async advanceStatus(dispenseId: string, now: string): Promise<DispenseStatus['status']> {
+    const NEXT: Record<string, string> = { submitted: 'dispatched', dispatched: 'delivered' };
+    const EVENT: Record<string, string> = {
+      dispatched: 'Dispatched by the pharmacy',
+      delivered: 'Delivered',
+    };
+    const { data, error } = await this.db
+      .from('mock_dispense')
+      .select('*')
+      .eq('id', dispenseId)
+      .maybeSingle();
+    if (error) this.fail('advanceStatus', error.message);
+    if (!data) this.fail('advanceStatus', `unknown dispense ${dispenseId}`);
+
+    const next = NEXT[data.status];
+    if (!next) return data.status; // already delivered (terminal): no-op.
+
+    const tracking = (data.tracking ?? { dispenseId, events: [] }) as DeliveryTracking;
+    const events = [...(tracking.events ?? []), { at: now, description: EVENT[next] }];
+    const { error: upErr } = await this.db
+      .from('mock_dispense')
+      .update({ status: next, tracking: { ...tracking, dispenseId, events } })
+      .eq('id', dispenseId);
+    if (upErr) this.fail('advanceStatus', upErr.message);
+    return next;
+  }
 }

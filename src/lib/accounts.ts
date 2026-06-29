@@ -342,6 +342,23 @@ export async function getQueueItemById(
   return (data as QueueItem) ?? null;
 }
 
+// Inserts a pending fast-lane queue_item POINTER (the same shape submitIntake
+// creates). Used by P2 intake and by P4 repeat requests so a fresh review enters
+// the clinician queue. intake_id points at the core intake the review reads.
+export async function insertFastQueueItem(
+  db: SupabaseClient,
+  accountId: string,
+  intakeId: string,
+): Promise<string> {
+  const { data, error } = await db
+    .from('queue_item')
+    .insert({ account_id: accountId, intake_id: intakeId, lane: 'fast', status: 'pending' })
+    .select('id')
+    .single();
+  if (error) throw new Error(`insertFastQueueItem: ${error.message}`);
+  return data.id as string;
+}
+
 export interface QueueDecision {
   status: 'approved' | 'escalated' | 'refused';
   decidedBy: string;
@@ -367,4 +384,62 @@ export async function recordQueueDecision(
     })
     .eq('id', queueItemId);
   if (error) throw new Error(`recordQueueDecision: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Dispensing pointer (P4). dispense_ref is a POINTER + coarse status only: which
+// account, a pointer to the core prescription (rx_ref), a pointer into the
+// dispensing provider (dispense_id), and a workflow status mirroring the journey
+// (submitted -> dispatched -> delivered). The script + the pharmacy record live
+// ONLY behind the DispensingAdapter / core; only their pointers are recorded
+// here. No medicine names, no doses, no clinical detail.
+// ---------------------------------------------------------------------------
+export interface DispenseRef {
+  id: string;
+  account_id: string;
+  rx_ref: string;
+  dispense_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function recordDispenseRef(
+  db: SupabaseClient,
+  accountId: string,
+  rxRef: string,
+  dispenseId: string,
+  status: string = 'submitted',
+): Promise<void> {
+  const { error } = await db
+    .from('dispense_ref')
+    .insert({ account_id: accountId, rx_ref: rxRef, dispense_id: dispenseId, status });
+  if (error) throw new Error(`recordDispenseRef: ${error.message}`);
+}
+
+export async function getLatestDispenseRef(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<DispenseRef | null> {
+  const { data, error } = await db
+    .from('dispense_ref')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestDispenseRef: ${error.message}`);
+  return (data as DispenseRef) ?? null;
+}
+
+export async function setDispenseRefStatus(
+  db: SupabaseClient,
+  dispenseId: string,
+  status: string,
+): Promise<void> {
+  const { error } = await db
+    .from('dispense_ref')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('dispense_id', dispenseId);
+  if (error) throw new Error(`setDispenseRefStatus: ${error.message}`);
 }

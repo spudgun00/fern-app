@@ -1,0 +1,132 @@
+---
+// P4 patient "your treatment" view: the current script (the patient's own
+// clinical record, read server-side from the core for display), the dispensing
+// status, and the delivery tracking. A member can lodge a repeat request, which
+// enters the clinician review queue.
+//
+// Copy stays plain and factual: this shows the patient their own prescription
+// record and its dispensing progress, never promotional / marketing-style copy.
+// Unstyled plumbing; the design system arrives later.
+import { createAdminClient } from '../lib/supabase/admin';
+import { getClinicalCore, getDispensing } from '../lib/adapters/factory';
+import { ensureAccount, getJourney } from '../lib/accounts';
+import { getTreatmentView } from '../lib/dispensing/dispense';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+if (!account.core_patient_id) return Astro.redirect('/account/profile');
+
+const journey = await getJourney(admin, account.id);
+const core = getClinicalCore(env, admin);
+const dispensing = getDispensing(env, admin);
+const view = await getTreatmentView(admin, core, dispensing, account.id, account.core_patient_id);
+
+const error = Astro.url.searchParams.get('error');
+const notice = Astro.url.searchParams.get('notice');
+
+const STATUS_COPY: Record<string, string> = {
+  submitted: 'Sent to the pharmacy',
+  dispatched: 'Dispatched by the pharmacy',
+  delivered: 'Delivered',
+};
+const statusLabel = (s: string | undefined) => (s ? (STATUS_COPY[s] ?? s) : 'Not yet sent');
+const isMock = env.DISPENSING_IMPL !== 'stripe' && env.DISPENSING_IMPL !== 'cloudrx';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Your treatment &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Your treatment</h1>
+    <p>Signed in as {user.email}. <a href="/intake">Back to intake</a> &middot; <a href="/logout">Log out</a></p>
+    {error && <p style="color: #b00">{error}</p>}
+    {notice && <p style="color: #060">{notice}</p>}
+
+    {
+      !view.script ? (
+        <section>
+          <p>
+            You do not have an issued prescription yet. Once a clinician has
+            reviewed your intake and approved treatment, your prescription and its
+            dispensing progress will appear here.
+          </p>
+          <p>Current status: <code>{journey?.state}</code></p>
+        </section>
+      ) : (
+        <>
+          <section>
+            <h2>Your current prescription</h2>
+            <p>This is your prescription record, issued by a clinician.</p>
+            <ul>
+              {view.script.request.items.map((it) => (
+                <li>
+                  {it.name}
+                  {it.dose ? ` — ${it.dose}` : ''}
+                  {it.quantity ? ` (quantity ${it.quantity})` : ''}
+                </li>
+              ))}
+            </ul>
+            <p>
+              Issued: {new Date(view.script.issuedAt).toLocaleString('en-GB')}
+            </p>
+          </section>
+
+          <section>
+            <h2>Dispensing</h2>
+            <p>
+              Dispensed by our pharmacy partner (a GPhC-registered pharmacy).
+              Current status: <strong>{statusLabel(view.status?.status)}</strong>.
+            </p>
+            <p>Journey state: <code>{journey?.state}</code></p>
+
+            <h3>Tracking</h3>
+            {view.tracking && view.tracking.events.length > 0 ? (
+              <ol>
+                {view.tracking.events.map((e) => (
+                  <li>
+                    {new Date(e.at).toLocaleString('en-GB')} &mdash; {e.description}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>No tracking updates yet.</p>
+            )}
+          </section>
+
+          {view.canRequestRepeat && (
+            <section>
+              <h2>Repeat</h2>
+              <p>
+                If you are due to continue this treatment, you can request a
+                repeat. A clinician reviews every repeat before it is dispensed.
+              </p>
+              <form method="POST" action="/api/treatment/repeat">
+                <button type="submit">Request a repeat</button>
+              </form>
+            </section>
+          )}
+
+          {isMock && view.dispense && view.status?.status !== 'delivered' && (
+            <section style="margin-top: 2rem; padding: 0.5rem; border: 1px dashed #999">
+              <p>
+                <strong>Dev only.</strong> Mock dispensing: step the status
+                forward (submitted &rarr; dispatched &rarr; delivered). The real
+                CloudRx pushes these updates itself.
+              </p>
+              <form method="POST" action="/api/dev/advance-dispense">
+                <button type="submit">Advance mock dispensing status</button>
+              </form>
+            </section>
+          )}
+        </>
+      )
+    }
+  </body>
+</html>

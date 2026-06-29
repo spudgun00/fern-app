@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
-import { getClinicalCore } from '../../../lib/adapters/factory';
+import { getClinicalCore, getDispensing } from '../../../lib/adapters/factory';
 import { ensureAccount } from '../../../lib/accounts';
 import { decideClinicianAction, type ClinicianAction } from '../../../lib/clinician/decide';
+import { dispenseIssuedScript } from '../../../lib/dispensing/dispense';
 
 // The clinician decision endpoint. Role-gated, then delegates to
 // decideClinicianAction where the hard line is enforced (clinician actor,
@@ -39,13 +40,26 @@ export const POST: APIRoute = async (ctx) => {
           ]
         : undefined;
 
-    await decideClinicianAction(admin, core, {
+    const result = await decideClinicianAction(admin, core, {
       clinicianAccountId: account.id,
       queueItemId,
       action,
       reason,
       rxItems,
     });
+
+    // On approve the script is issued (decide stops at rx_issued, the clinical
+    // decision). P4: the issued script now flows to dispensing (rx_issued ->
+    // dispensing) through the CloudRx adapter. Decision and transmission stay
+    // separate functions; the route composes them.
+    if (result.action === 'approve' && result.rxId) {
+      const dispensing = getDispensing(env, admin);
+      await dispenseIssuedScript(admin, core, dispensing, {
+        accountId: result.patientAccountId,
+        corePatientId: result.corePatientId,
+        rxId: result.rxId,
+      });
+    }
   } catch (err) {
     return ctx.redirect(
       detail +

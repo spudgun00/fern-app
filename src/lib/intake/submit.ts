@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ClinicalCoreAdapter } from '../adapters/clinical-core';
-import { advanceJourney, recordIntakeRef, setJourney } from '../accounts';
+import { advanceJourney, insertFastQueueItem, recordIntakeRef, setJourney } from '../accounts';
 import { routeIntake, type IntakeAnswers, type RoutingDecision } from './routing';
 
 export interface SubmitResult {
@@ -48,13 +48,7 @@ export async function submitIntake(
   if (decision.outcome === 'fast') {
     // Fast lane -> the clinician review queue. queue_item is a POINTER only.
     await advanceJourney(admin, accountId, 'in_review_queue', 'fast');
-    const { error } = await admin.from('queue_item').insert({
-      account_id: accountId,
-      intake_id: intakeId,
-      lane: 'fast',
-      status: 'pending',
-    });
-    if (error) throw new Error(`submitIntake(queue_item): ${error.message}`);
+    await insertFastQueueItem(admin, accountId, intakeId);
   } else if (decision.outcome === 'full') {
     // Assessed lane: routed and awaiting a booking (P6). The lane is recorded;
     // the state stays at intake_submitted until intake_submitted -> consult_booked
