@@ -1,0 +1,79 @@
+---
+// P3 clinician console — the fast-lane review queue. Role-gated: clinician only.
+// The queue is driven by app-DB pointers (queue_item); the clinical content for
+// each item (the routing reasons / flags) is read from the core for display and
+// never copied app-side. Unstyled plumbing; the design system arrives later.
+import { createAdminClient } from '../../lib/supabase/admin';
+import { getClinicalCore } from '../../lib/adapters/factory';
+import { ensureAccount, listPendingFastQueue } from '../../lib/accounts';
+import type { RoutingDecision } from '../../lib/intake/routing';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role !== 'clinician') return Astro.redirect('/');
+
+const core = getClinicalCore(env, admin);
+const items = await listPendingFastQueue(admin);
+
+// For each pending pointer, read the routing reasons from the core for display.
+const rows = await Promise.all(
+  items.map(async (item) => {
+    const intake = await core.getIntake(item.intake_id);
+    const routing = (intake?.payload.routing as RoutingDecision | undefined) ?? null;
+    return { item, routing, condition: intake?.payload.condition ?? 'unknown' };
+  }),
+);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Review queue &mdash; Fern clinician console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Clinician console &mdash; review queue</h1>
+    <p>Signed in as {user.email} (clinician). <a href="/logout">Log out</a></p>
+    <p>Fast-lane intakes awaiting an async review decision, oldest first.</p>
+
+    {
+      rows.length === 0 ? (
+        <p>The queue is empty. No fast-lane intakes are awaiting review.</p>
+      ) : (
+        <table border="1" cellpadding="6" cellspacing="0">
+          <thead>
+            <tr>
+              <th>Submitted</th>
+              <th>Condition</th>
+              <th>Patient (core ref)</th>
+              <th>Flags / reasons</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ item, routing, condition }) => (
+              <tr>
+                <td>{new Date(item.created_at).toLocaleString('en-GB')}</td>
+                <td>{condition}</td>
+                <td><code>{item.account_id.slice(0, 8)}</code></td>
+                <td>
+                  <ul>
+                    {(routing?.reasons ?? []).map((r) => (
+                      <li>{r}</li>
+                    ))}
+                  </ul>
+                </td>
+                <td>
+                  <a href={`/clinician/intake/${item.id}`}>Review</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </body>
+</html>

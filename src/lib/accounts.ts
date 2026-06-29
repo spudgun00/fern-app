@@ -294,3 +294,77 @@ export async function getLatestIntakeRef(
   if (error) throw new Error(`getLatestIntakeRef: ${error.message}`);
   return (data as IntakeRef) ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Review queue (P3). queue_item is a POINTER + administrative status only: which
+// account, which core intake, the lane, the workflow status, and (after a
+// decision) WHO decided, WHEN, and POINTERS to the core artifacts produced. The
+// clinician's rationale and the issued script live ONLY in the core; only their
+// pointers (note_ref / rx_ref) are recorded here. No answers, no clinical flags.
+// ---------------------------------------------------------------------------
+export interface QueueItem {
+  id: string;
+  account_id: string;
+  intake_id: string;
+  lane: Lane;
+  status: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  note_ref: string | null;
+  rx_ref: string | null;
+  created_at: string;
+}
+
+// The clinician's fast-lane review queue: pending fast-lane items, oldest first
+// (the spec's queue ordering). Driven by app-DB pointers; the clinical content
+// for each item is read from the core for display, never copied here.
+export async function listPendingFastQueue(db: SupabaseClient): Promise<QueueItem[]> {
+  const { data, error } = await db
+    .from('queue_item')
+    .select('*')
+    .eq('lane', 'fast')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`listPendingFastQueue: ${error.message}`);
+  return (data as QueueItem[]) ?? [];
+}
+
+export async function getQueueItemById(
+  db: SupabaseClient,
+  queueItemId: string,
+): Promise<QueueItem | null> {
+  const { data, error } = await db
+    .from('queue_item')
+    .select('*')
+    .eq('id', queueItemId)
+    .maybeSingle();
+  if (error) throw new Error(`getQueueItemById: ${error.message}`);
+  return (data as QueueItem) ?? null;
+}
+
+export interface QueueDecision {
+  status: 'approved' | 'escalated' | 'refused';
+  decidedBy: string;
+  noteRef: string;
+  rxRef?: string | null;
+}
+
+// Records the clinician decision against the queue_item: the workflow status,
+// who decided, when, and pointers to the core note (and prescription on approve).
+export async function recordQueueDecision(
+  db: SupabaseClient,
+  queueItemId: string,
+  decision: QueueDecision,
+): Promise<void> {
+  const { error } = await db
+    .from('queue_item')
+    .update({
+      status: decision.status,
+      decided_by: decision.decidedBy,
+      decided_at: new Date().toISOString(),
+      note_ref: decision.noteRef,
+      rx_ref: decision.rxRef ?? null,
+    })
+    .eq('id', queueItemId);
+  if (error) throw new Error(`recordQueueDecision: ${error.message}`);
+}

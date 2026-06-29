@@ -38,5 +38,22 @@ const journey = await getJourney(admin, account.id);
       Runs server-side through the adapters and the state machine. Re-running
       resets the journey to <code>registered</code> and runs fresh (idempotent).
     </p>
+
+    <h2>Dev role (P3)</h2>
+    <p>
+      Dev-only: flip this account's role so the clinician console is walkable.
+      Current role: <code>{account.role}</code>.
+    </p>
+    <form method="POST" action="/api/dev/set-role" style="display: inline">
+      <input type="hidden" name="role" value="clinician" />
+      <button type="submit">Become clinician</button>
+    </form>
+    <form method="POST" action="/api/dev/set-role" style="display: inline">
+      <input type="hidden" name="role" value="patient" />
+      <button type="submit">Become patient</button>
+    </form>
+    {account.role === 'clinician' && (
+      <p><a href="/clinician">Open the clinician review queue &rarr;</a></p>
+    )}
   </body>
 </html>

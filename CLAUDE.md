@@ -10,16 +10,19 @@ live only here. Authoritative spec: `docs/fern-patient-zone-build-spec.md` — r
 it before building. Build is phased (P0…P7); **build one phase, prove its success
 test on the deployed URL, then stop**. Do not build ahead of a passing test.
 
-Status: **P2 built** (two-lane intake questionnaire + deterministic routing),
-deployed at https://fern-app.jimgill.workers.dev. P0 (foundation + adapter spine
-+ mocks) and P1 (account + ID verification) done. Success tests A (`npm test`,
-36 passed) and B pass: on the deployed URL a verified patient completes the
-menopause/HRT questionnaire and is routed deterministically to the lane shown on
-screen — a clear continuing picture -> fast lane (`in_review_queue`), a seeded
-risk flag (e.g. clot history) -> full lane (`intake_submitted`, lane `full`,
-awaiting P6 booking), and a red-flag answer -> stop + signpost (no lane). P1's
-Test C (real Stripe Identity test-mode path) is still wired-but-unclosed (needs
-the Stripe test secrets set, see below). P3+ not started.
+Status: **P3 built** (clinician console: review queue + async approve + script
+issue — **the fast lane closes**), deployed at https://fern-app.jimgill.workers.dev.
+P0 (foundation + adapter spine + mocks), P1 (account + ID verification) and P2
+(two-lane intake + deterministic routing) done. Success tests A (`npm test`, 43
+passed) and B pass. P3's test proved on the deployed URL: a fast-lane intake
+appears in the clinician queue; **approve** issues a (mock) script and advances
+the patient to `rx_issued`; **escalate** moves the patient into the full lane
+(`escalated`, lane `full`, awaiting P6 booking); **refuse** terminates at
+`refused` with a recorded reason and a patient-facing signpost; and a patient
+role attempting `/api/clinician/decide` is blocked (no path reaches `rx_issued`
+without a clinician action). P1's Test C (real Stripe Identity test-mode path) is
+still wired-but-unclosed (needs the Stripe test secrets set, see below). P4+ not
+started.
 
 ## Stack
 
@@ -143,6 +146,52 @@ Leave `IDENTITY_IMPL=mock` to keep the no-keys mock onboarding walk working.
   toggles) belong in `wrangler.jsonc` `vars`. Local dev + tests read the same
   keys from `.dev.vars` (gitignored). Never prefix a secret `PUBLIC_` or it
   lands in the client bundle.
+
+## P2 done (intake + routing)
+
+- **Added:** the two-lane menopause/HRT intake questionnaire + deterministic
+  routing on top of the P1 spine.
+- **Key pattern:** ALL routing lives in ONE pure function, `routeIntake` in
+  `src/lib/intake/routing.ts` — the single source of routing truth, fully
+  unit-tested. Precedence: red flag -> stop + signpost; HRT initiation / risk
+  flag / incomplete safety picture -> full lane; clear continuing -> fast lane.
+- **Three lane outcomes (proven on the live URL):** clear continuing -> fast
+  (`in_review_queue` + a `queue_item`); risk flag -> full (`intake_submitted`,
+  lane `full`, no `queue_item`); red flag -> stop (no lane, no `queue_item`,
+  signpost shown).
+- **Hard line held:** no questionnaire path advances past `in_review_queue` —
+  nothing auto-approves or auto-scripts. The clinician decision is P3.
+- **Boundary:** clinical answers + routing reasons live only in the core;
+  `intake_ref` holds only a pointer + outcome (asserted by a denylist test).
+
+## P3 done (clinician console — fast lane closes)
+
+- **Added:** the clinician console (fast-lane review queue + the prescribing
+  action) on top of the P2 spine. No new journey state, no new app-DB table.
+- **Key pattern:** ALL clinician decisions go through ONE function,
+  `decideClinicianAction` in `src/lib/clinician/decide.ts` — the hard line lives
+  there, in code: it asserts a **clinician** actor (defence-in-depth beyond the
+  route's role gate), a **pending fast-lane item at `in_review_queue`**, and a
+  **recorded reason**; writes the rationale to the CORE (`createConsultNote`,
+  Article 9 reasoning stays in the core); then **approve** -> `issuePrescription`
+  + `in_review_queue -> approved -> rx_issued`; **escalate** -> `escalated`
+  (lane `full`, awaiting P6 booking — escalate stops at `escalated`, the
+  `escalated -> consult_booked` booking is P6); **refuse** -> `refused` (terminal)
+  + patient-facing signpost. `issuePrescription` is called from the approve
+  branch only.
+- **Surfaces (role-gated):** `/clinician` queue (pending fast-lane items, oldest
+  first; flags read from the core for display), `/clinician/intake/[id]` detail +
+  action bar, `/api/clinician/decide`. Patient `/intake` shows the post-decision
+  state. A dev-only **Become clinician/patient** toggle on `/dev/harness`
+  (`/api/dev/set-role`) makes the two-actor walk runnable without seeding a
+  clinician in the DB (mock-only test affordance, not product).
+- **Boundary:** `queue_item` gained decision **pointers only** — `decided_by`
+  (clinician account, no real identity), `decided_at`, `note_ref` + `rx_ref`
+  (core pointers). The rationale and the script live ONLY in the core.
+- **Proven on the live URL:** fast-lane intake -> appears in the clinician queue;
+  approve -> `rx_issued` (+ script in the core); escalate -> `escalated`/full;
+  refuse -> `refused` + patient signpost; a patient role hitting
+  `/api/clinician/decide` is bounced to `/` (no decision). `npm test`: 43 passed.
 
 ## Verifying
 

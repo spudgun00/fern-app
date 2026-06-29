@@ -57,11 +57,33 @@ const redFlagQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'redFlag');
       ref && decision ? (
         <section>
           <h2>Your next step</h2>
-          {decision.outcome === 'fast' && (
+          {decision.outcome === 'fast' && journey?.state === 'in_review_queue' && (
             <p>
               Your answers have gone to our clinician review queue. A clinician
               will review them and decide the next step. Nothing has been
               prescribed: a clinician makes that decision.
+            </p>
+          )}
+          {(journey?.state === 'rx_issued' ||
+            journey?.state === 'approved') && (
+            <p style="color: #060">
+              A clinician has reviewed your intake and approved treatment. Your
+              prescription has been issued and will move to dispensing. (Dispensing
+              status arrives in a later step.)
+            </p>
+          )}
+          {journey?.state === 'escalated' && (
+            <p>
+              A clinician has reviewed your intake. The safer next step is an
+              assessed consultation with a clinician. Booking arrives in a later
+              step.
+            </p>
+          )}
+          {journey?.state === 'refused' && (
+            <p style="color: #b00">
+              A clinician has reviewed your intake and we cannot continue your
+              request here. Please speak to your GP, or call NHS 111 if you need
+              advice sooner.
             </p>
           )}
           {decision.outcome === 'full' && (
