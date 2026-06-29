@@ -10,20 +10,20 @@ live only here. Authoritative spec: `docs/fern-patient-zone-build-spec.md` — r
 it before building. Build is phased (P0…P7); **build one phase, prove its success
 test on the deployed URL, then stop**. Do not build ahead of a passing test.
 
-Status: **P4 built** (script to CloudRx + patient dispensing status — **dispensing
-closes**), deployed at https://fern-app.jimgill.workers.dev. P0 (foundation +
-adapter spine + mocks), P1 (account + ID verification), P2 (two-lane intake +
-deterministic routing) and P3 (clinician console — fast lane closes) done. Success
-tests A (`npm test`, 48 passed) and B pass. P4's test proved on the deployed URL:
-on **approve** the issued script flows to the (mock) CloudRx pharmacy and the
-patient advances `rx_issued -> dispensing`; the patient `/treatment` view shows
-the script + status **Sent to the pharmacy**; stepping the mock dispatch
-(submitted -> dispatched -> delivered) reflects on the patient view with a
-tracking trail and advances `dispensing -> delivered`; and a patient lodges a
-**repeat request** that enters the clinician review queue as a fresh pending
-fast-lane item (no auto-script). P1's Test C (real Stripe Identity test-mode path)
-is still wired-but-unclosed (needs the Stripe test secrets set, see below). P5+
-not started.
+Status: **P5 built** (payment + membership + repeat tiering — **money closes**),
+deployed at https://fern-app.jimgill.workers.dev. P0 (foundation + adapter spine +
+mocks), P1 (account + ID verification), P2 (two-lane intake + deterministic
+routing), P3 (clinician console — fast lane closes) and P4 (script to CloudRx +
+patient dispensing status — dispensing closes) done. Success tests A (`npm test`,
+55 passed) and B pass. P5's test proved on the deployed URL: paying the consult
+fee (mock Checkout) flips the `hasPaidConsult` gate; subscribing to membership
+(mock Checkout subscription) activates membership and advances `delivered ->
+active_member`; a member's repeat reaches the clinician review queue with no new
+consult charge while a non-member's repeat is gated; and cancelling via the
+(mock) portal flips membership to `canceled` (the member loses the no-charge
+repeat). P1's Test C (real Stripe Identity test-mode path) and P5's real Stripe
+Checkout/Billing path are both wired-but-unclosed (need the Stripe test secrets
+set, see below). P6+ not started.
 
 ## Stack
 
@@ -39,14 +39,16 @@ All clinical-record + dispensing operations go through one adapter interface so
 the app stays record-host-agnostic until the real core is chosen.
 
 - Adapters: `src/lib/adapters/` — `ClinicalCoreAdapter`, `DispensingAdapter`,
-  `IdentityAdapter`, `MockCore` (Supabase `mock_*` tables), `MockCoreB`
-  (in-memory), `MockDispensing`, `MockIdentity` (mock provider, `mock_identity_*`),
-  `StripeIdentity` (real, Stripe REST via fetch, no Node SDK).
-- Factory: `getClinicalCore()` / `getDispensing()` / `getIdentity()` pick the
-  impl from `CORE_IMPL` / `DISPENSING_IMPL` / `IDENTITY_IMPL` (default `mock`).
-  Never branch on the impl anywhere else (the dev harness + mock-confirm route
-  do an `instanceof MockIdentity` check to complete the mock flow server-side;
-  that is a mock-only test affordance, not business logic).
+  `IdentityAdapter`, `PaymentsAdapter`, `MockCore` (Supabase `mock_*` tables),
+  `MockCoreB` (in-memory), `MockDispensing`, `MockIdentity` (mock provider,
+  `mock_identity_*`), `MockPayments` (mock provider, `mock_payment_session`),
+  `StripeIdentity` and `StripePayments` (real, Stripe REST via fetch, no Node SDK).
+- Factory: `getClinicalCore()` / `getDispensing()` / `getIdentity()` /
+  `getPayments()` pick the impl from `CORE_IMPL` / `DISPENSING_IMPL` /
+  `IDENTITY_IMPL` / `PAYMENTS_IMPL` (default `mock`). Never branch on the impl
+  anywhere else (the dev harness + the mock-confirm / mock-portal-cancel routes do
+  an `instanceof Mock*` check to complete the mock flow server-side; that is a
+  mock-only test affordance, not business logic).
 - Journey state machine: `src/lib/journey/`. Illegal transitions throw.
 - Intake routing (P2): `src/lib/intake/` — `routing.ts` is the deterministic,
   pure `routeIntake(answers)` (the single source of routing truth: fast / full /
@@ -115,6 +117,22 @@ After the first deploy, the three Supabase values are Worker **secrets**
    The webhook (signature-verified) advances the journey to `id_verified`; the
    `/account/verify/complete` poll is an idempotent fallback.
 Leave `IDENTITY_IMPL=mock` to keep the no-keys mock onboarding walk working.
+
+**To activate the Stripe Checkout/Billing path (P5):** reuses the same Stripe
+account/`STRIPE_SECRET_KEY` as Identity.
+1. Create two test-mode Prices in Stripe (a one-off ~£100 consult, a ~£18/mo
+   recurring membership) and `wrangler secret put STRIPE_PRICE_CONSULT` /
+   `STRIPE_PRICE_MEMBERSHIP` with their `price_…` ids.
+2. Add a webhook endpoint at
+   `https://fern-app.jimgill.workers.dev/api/webhooks/stripe-billing` for
+   `checkout.session.completed` + `customer.subscription.*`; copy its signing
+   secret into `wrangler secret put STRIPE_BILLING_WEBHOOK_SECRET` (distinct from
+   the identity webhook secret). Enable the customer portal in the Stripe dashboard.
+3. Set `PAYMENTS_IMPL` to `stripe` in `wrangler.jsonc` `vars`, `npm run deploy`,
+   then walk `/account/billing` and complete Stripe's test-mode checkout. The
+   webhook activates membership + flips the consult gate; the
+   `/account/billing/complete` poll is the idempotent fallback.
+Leave `PAYMENTS_IMPL=mock` to keep the no-keys mock billing walk working.
 
 ## Runtime gotchas (cost real time in P0)
 
@@ -226,6 +244,55 @@ Leave `IDENTITY_IMPL=mock` to keep the no-keys mock onboarding walk working.
   the mock -> `dispatched` -> `delivered` reflects on `/treatment` (tracking trail
   + `dispensing -> delivered`); a lodged repeat appears as a new pending item in
   the clinician queue. `npm test`: 48 passed.
+
+## P5 done (payment + membership + repeat tiering — money closes)
+
+- **Added:** the money surface. A one-off consult fee (Stripe Checkout,
+  mode=payment, ~£100) and a recurring membership (Stripe Billing,
+  mode=subscription, ~£18/mo), the customer portal, and the first-vs-repeat
+  tiering rule, all behind a new `PaymentsAdapter` (mocked now). Closes **money**
+  on top of the P4 dispensing loop.
+- **Key pattern (the second external integration, mirrors Stripe Identity
+  exactly):** `PaymentsAdapter` interface + `MockPayments` (default, dev-walkable
+  via `mock_payment_session` + a `/account/billing/mock` checkout page) +
+  `StripePayments` (real, Stripe REST via `fetch`, NO Node SDK). Factory
+  `getPayments()` picks the impl from `PAYMENTS_IMPL` (default `mock`); never
+  branch on the impl elsewhere (the mock-confirm + mock-portal-cancel routes do an
+  `instanceof MockPayments` check to complete the mock flow server-side, a
+  mock-only test affordance like the identity one). The webhook
+  `/api/webhooks/stripe-billing` reuses the existing `verifyStripeWebhook` HMAC
+  check with its own `STRIPE_BILLING_WEBHOOK_SECRET`; the `/account/billing/complete`
+  return-page poll (`finaliseLatestPending`) is the idempotent fallback, exactly
+  as the identity webhook + verify/complete poll pair.
+- **The tiering rule, in code:** orchestration lives in `src/lib/payments/billing.ts`.
+  FIRST script = consult-priced: `hasPaidConsult(accountId)` is the gate the
+  full-lane booking (P6) will consult; P5 builds + proves it. REPEATS =
+  membership-covered: `lodgeRepeatRequest` now requires `isActiveMember` (a member
+  rides free into the queue; a non-member is gated to subscribe). Money only
+  GATES — paying never issues a script (a clinician still decides); decision and
+  payment stay separate, like decision and dispensing in P4.
+- **Journey machine untouched (spec-exact, no new states, no cycles):** membership
+  reaches `active_member` via the existing `delivered -> active_member` transition
+  (`advanceToActiveMemberIfEligible`, guarded + idempotent like
+  `finaliseVerification`). The `membership` table is the authoritative billing
+  status (`inactive | active | canceled`); a portal cancel flips it to `canceled`
+  (the journey is NOT rolled back — `active_member` is terminal — but `isActiveMember`
+  goes false, so a cancelled member loses the no-charge repeat).
+- **Boundary (hard line):** the app-DB `membership` table (P5 migration) + the
+  reused `payment_ref` (P0) hold POINTERS + coarse status ONLY
+  (`provider_customer_ref`, `provider_subscription_ref`, `status`). NO card data,
+  NO PII; the customer + payment method live with the provider (Stripe). A denylist
+  test asserts the `membership` column set never grows to card/PII detail (mirrors
+  the P2 intake_ref / P4 dispense_ref denylists).
+- **Proven on the live URL:** consult fee paid -> gate flips (`Consultation fee
+  paid`); subscribe -> membership active + journey `delivered -> active_member`;
+  member repeat -> enters the clinician queue as a fresh pending fast-lane item,
+  no new consult charge; non-member repeat -> gated; portal cancel -> membership
+  `canceled`, member repeat re-gated. `npm test`: 55 passed.
+- **Deferred (NOT built, same as P4 deferred the loop):** the full repeat
+  re-dispense CYCLE (clinician re-approves a repeat -> re-issue -> re-dispense)
+  needs non-spec journey cycles, so it is out of scope; P5 proves the repeat
+  ENTERS the queue with no charge (the P5 success test), nothing more.
 
 ## Verifying
 

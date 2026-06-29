@@ -443,3 +443,165 @@ export async function setDispenseRefStatus(
     .eq('dispense_id', dispenseId);
   if (error) throw new Error(`setDispenseRefStatus: ${error.message}`);
 }
+
+// ---------------------------------------------------------------------------
+// Payment pointer (P5). payment_ref (P0 table) records ONLY a pointer into the
+// payments provider (provider_ref = the Checkout session / payment id), the kind
+// (consult one-off vs membership), and a coarse status. NO card data, NO PII;
+// those live with the provider (Stripe) behind the PaymentsAdapter. Used here
+// for the one-off consult fee; recurring membership state lives in `membership`.
+// ---------------------------------------------------------------------------
+export type PaymentKind = 'consult' | 'membership';
+
+export interface PaymentRef {
+  id: string;
+  account_id: string;
+  provider_ref: string | null;
+  kind: PaymentKind;
+  status: string;
+  created_at: string;
+}
+
+export async function recordPaymentRef(
+  db: SupabaseClient,
+  accountId: string,
+  kind: PaymentKind,
+  providerRef: string,
+  status: string = 'pending',
+): Promise<void> {
+  const { error } = await db
+    .from('payment_ref')
+    .insert({ account_id: accountId, kind, provider_ref: providerRef, status });
+  if (error) throw new Error(`recordPaymentRef: ${error.message}`);
+}
+
+export async function setPaymentRefStatus(
+  db: SupabaseClient,
+  providerRef: string,
+  status: string,
+): Promise<void> {
+  const { error } = await db
+    .from('payment_ref')
+    .update({ status })
+    .eq('provider_ref', providerRef);
+  if (error) throw new Error(`setPaymentRefStatus: ${error.message}`);
+}
+
+export async function getLatestPaymentRef(
+  db: SupabaseClient,
+  accountId: string,
+  kind: PaymentKind,
+): Promise<PaymentRef | null> {
+  const { data, error } = await db
+    .from('payment_ref')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('kind', kind)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestPaymentRef: ${error.message}`);
+  return (data as PaymentRef) ?? null;
+}
+
+// The latest still-pending checkout session for an account (either kind). The
+// billing return page reads this to finalise an in-flight checkout via its
+// provider_ref (the session id), mirroring how the ID-verify return page reads
+// the latest id_verification.
+export async function getLatestPendingPaymentRef(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<PaymentRef | null> {
+  const { data, error } = await db
+    .from('payment_ref')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestPendingPaymentRef: ${error.message}`);
+  return (data as PaymentRef) ?? null;
+}
+
+// The consult-payment gate (tiering): a patient has paid the consult fee once a
+// consult payment_ref is marked paid. The full-lane booking (P6) consults this;
+// P5 surfaces it on the billing page and proves the gate flips on payment.
+export async function hasPaidConsult(db: SupabaseClient, accountId: string): Promise<boolean> {
+  const ref = await getLatestPaymentRef(db, accountId, 'consult');
+  return ref?.status === 'paid';
+}
+
+// ---------------------------------------------------------------------------
+// Membership pointer (P5). membership holds ONLY the provider customer +
+// subscription pointers and a coarse billing status (inactive | active |
+// canceled). NO card data, NO PII. status === 'active' is what drives member
+// access (the no-charge repeat tiering) and the delivered -> active_member
+// journey transition.
+// ---------------------------------------------------------------------------
+export type MembershipStatus = 'inactive' | 'active' | 'canceled';
+
+export interface Membership {
+  id: string;
+  account_id: string;
+  provider_customer_ref: string | null;
+  provider_subscription_ref: string | null;
+  status: MembershipStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getMembership(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<Membership | null> {
+  const { data, error } = await db
+    .from('membership')
+    .select('*')
+    .eq('account_id', accountId)
+    .maybeSingle();
+  if (error) throw new Error(`getMembership: ${error.message}`);
+  return (data as Membership) ?? null;
+}
+
+// Upserts the single membership row for an account (one subscription state per
+// account). Pointers + status only.
+export async function upsertMembership(
+  db: SupabaseClient,
+  accountId: string,
+  fields: {
+    status: MembershipStatus;
+    providerCustomerRef?: string | null;
+    providerSubscriptionRef?: string | null;
+  },
+): Promise<void> {
+  const row: Record<string, unknown> = {
+    account_id: accountId,
+    status: fields.status,
+    updated_at: new Date().toISOString(),
+  };
+  if (fields.providerCustomerRef !== undefined) row.provider_customer_ref = fields.providerCustomerRef;
+  if (fields.providerSubscriptionRef !== undefined)
+    row.provider_subscription_ref = fields.providerSubscriptionRef;
+  const { error } = await db.from('membership').upsert(row, { onConflict: 'account_id' });
+  if (error) throw new Error(`upsertMembership: ${error.message}`);
+}
+
+// Flips membership status by provider customer ref (the cancel webhook / portal
+// path maps a Stripe customer to its account this way).
+export async function setMembershipStatusByCustomer(
+  db: SupabaseClient,
+  providerCustomerRef: string,
+  status: MembershipStatus,
+): Promise<void> {
+  const { error } = await db
+    .from('membership')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('provider_customer_ref', providerCustomerRef);
+  if (error) throw new Error(`setMembershipStatusByCustomer: ${error.message}`);
+}
+
+export async function isActiveMember(db: SupabaseClient, accountId: string): Promise<boolean> {
+  const m = await getMembership(db, accountId);
+  return m?.status === 'active';
+}

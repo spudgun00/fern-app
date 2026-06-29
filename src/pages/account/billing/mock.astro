@@ -1,0 +1,33 @@
+---
+// In-app stand-in for the provider's hosted checkout, used only when
+// PAYMENTS_IMPL=mock. It plays the role of Stripe's hosted Checkout page: the
+// user "pays" here. No card details are entered or stored; this is a dev
+// affordance. The real Stripe test-mode checkout replaces this page entirely.
+const { user } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const session = Astro.url.searchParams.get('session') ?? '';
+const kind = Astro.url.searchParams.get('kind') ?? 'consult';
+const ret = Astro.url.searchParams.get('return') ?? '/account/billing/complete';
+
+const label = kind === 'membership' ? 'membership (£18/mo)' : 'consultation fee (£100)';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mock checkout &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Mock checkout (dev only)</h1>
+    <p>Stand-in for the provider hosted checkout. No card details are entered or stored.</p>
+    <p>You are paying for: <strong>{label}</strong>.</p>
+    <form method="POST" action="/api/payments/mock-confirm">
+      <input type="hidden" name="session" value={session} />
+      <input type="hidden" name="return" value={ret} />
+      <button type="submit">Complete payment (test)</button>
+    </form>
+    <p><a href="/account/billing">Cancel and go back</a></p>
+  </body>
+</html>

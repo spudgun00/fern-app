@@ -1,0 +1,99 @@
+---
+// P5 billing hub: the money surface. Shows the consult fee (one-off, gates the
+// full-lane booking + first script) and the membership (recurring, covers
+// repeats), plus the billing-portal entry. Unstyled plumbing; the design system
+// arrives later. Copy stays plain and factual; the public-site figures (~£100
+// consult, ~£18/mo membership) are shown transparently with no efficacy claims.
+import { createAdminClient } from '../../lib/supabase/admin';
+import { ensureAccount, getJourney } from '../../lib/accounts';
+import { getBillingView } from '../../lib/payments/billing';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+
+const journey = await getJourney(admin, account.id);
+const view = await getBillingView(admin, account.id);
+
+const error = Astro.url.searchParams.get('error');
+const notice = Astro.url.searchParams.get('notice');
+
+const memberStatus = view.membership?.status ?? 'inactive';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Membership and billing &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Membership and billing</h1>
+    <p>
+      Signed in as {user.email}. <a href="/treatment">Your treatment</a> &middot;{' '}
+      <a href="/logout">Log out</a>
+    </p>
+    {error && <p style="color: #b00">{error}</p>}
+    {notice && <p style="color: #060">{notice}</p>}
+
+    <section>
+      <h2>Consultation fee</h2>
+      <p>
+        A first prescription follows an assessed consultation, charged as a
+        one-off fee of around &pound;100. Paying it lets you book your consult.
+      </p>
+      {
+        view.consultPaid ? (
+          <p style="color: #060">
+            Consultation fee paid. Booking your consult arrives in the next step.
+          </p>
+        ) : (
+          <>
+            {view.consultPending && (
+              <p>A previous payment is still being confirmed. Reload after paying.</p>
+            )}
+            <form method="POST" action="/api/payments/checkout/start">
+              <input type="hidden" name="kind" value="consult" />
+              <button type="submit">Pay the consultation fee (&pound;100)</button>
+            </form>
+          </>
+        )
+      }
+    </section>
+
+    <section>
+      <h2>Membership</h2>
+      <p>
+        Membership is around &pound;18 a month and covers your ongoing care,
+        including repeat prescriptions reviewed by a clinician at no extra
+        consultation charge.
+      </p>
+      <p>Membership status: <code>{memberStatus}</code></p>
+      {
+        view.isMember ? (
+          <>
+            <p style="color: #060">Your membership is active.</p>
+            <form method="POST" action="/api/payments/portal">
+              <button type="submit">Manage or cancel membership</button>
+            </form>
+          </>
+        ) : (
+          <>
+            {memberStatus === 'canceled' && (
+              <p>Your membership is cancelled. You can subscribe again below.</p>
+            )}
+            <form method="POST" action="/api/payments/checkout/start">
+              <input type="hidden" name="kind" value="membership" />
+              <button type="submit">Subscribe to membership (&pound;18/mo)</button>
+            </form>
+          </>
+        )
+      }
+    </section>
+
+    <p>Journey state: <code>{journey?.state}</code></p>
+  </body>
+</html>

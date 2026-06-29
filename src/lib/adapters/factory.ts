@@ -3,11 +3,14 @@ import type { AppEnv } from '../env';
 import type { ClinicalCoreAdapter } from './clinical-core';
 import type { DispensingAdapter } from './dispensing';
 import type { IdentityAdapter } from './identity';
+import type { PaymentsAdapter } from './payments';
 import { MockCore } from './mock-core';
 import { MockCoreB } from './mock-core-b';
 import { MockDispensing } from './mock-dispensing';
 import { MockIdentity } from './mock-identity';
 import { StripeIdentity } from './stripe-identity';
+import { MockPayments } from './mock-payments';
+import { StripePayments } from './stripe-payments';
 
 // Selects the implementation purely from the env flag. The rest of the app
 // (routes, harness, tests) only ever talks to the interface, so swapping the
@@ -37,5 +40,19 @@ export function getIdentity(env: AppEnv, db: SupabaseClient): IdentityAdapter {
     case 'mock':
     default:
       return new MockIdentity(db);
+  }
+}
+
+export function getPayments(env: AppEnv, db: SupabaseClient): PaymentsAdapter {
+  switch (env.PAYMENTS_IMPL) {
+    case 'stripe':
+      return new StripePayments(
+        env.STRIPE_SECRET_KEY ?? '',
+        env.STRIPE_PRICE_CONSULT ?? '',
+        env.STRIPE_PRICE_MEMBERSHIP ?? '',
+      );
+    case 'mock':
+    default:
+      return new MockPayments(db);
   }
 }

@@ -1,0 +1,69 @@
+---
+// Return page from the payment provider (and the mock checkout). Finalises the
+// in-flight checkout (the latest pending session): marks the consult fee paid or
+// activates the membership, and advances delivered -> active_member when
+// eligible. For Stripe the webhook is the authoritative path; this poll is a
+// belt-and-braces refresh and is idempotent with it.
+import { createAdminClient } from '../../../lib/supabase/admin';
+import { getPayments } from '../../../lib/adapters/factory';
+import { ensureAccount, getJourney } from '../../../lib/accounts';
+import { finaliseLatestPending, getBillingView } from '../../../lib/payments/billing';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+
+let problem: string | null = null;
+let finalisedKind: string | null = null;
+try {
+  const payments = getPayments(env, admin);
+  const result = await finaliseLatestPending(admin, payments, account.id);
+  if (result?.complete) finalisedKind = result.kind;
+} catch (err) {
+  problem = err instanceof Error ? err.message : String(err);
+}
+
+const view = await getBillingView(admin, account.id);
+const journey = await getJourney(admin, account.id);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Payment &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Payment</h1>
+    {problem && <p style="color: #b00">{problem}</p>}
+    {
+      finalisedKind === 'consult' && (
+        <p style="color: #060">Your consultation fee is paid.</p>
+      )
+    }
+    {
+      finalisedKind === 'membership' && (
+        <p style="color: #060">Your membership is now active.</p>
+      )
+    }
+    {
+      !finalisedKind && !problem && (
+        <p>
+          Your payment is being confirmed. This can take a moment; reload this
+          page, or return to <a href="/account/billing">billing</a>.
+        </p>
+      )
+    }
+    <ul>
+      <li>Consultation fee: <code>{view.consultPaid ? 'paid' : 'unpaid'}</code></li>
+      <li>Membership: <code>{view.membership?.status ?? 'inactive'}</code></li>
+      <li>Journey state: <code>{journey?.state}</code></li>
+    </ul>
+    <p>
+      <a href="/account/billing">Back to billing</a> &middot;{' '}
+      <a href="/treatment">Your treatment</a>
+    </p>
+  </body>
+</html>

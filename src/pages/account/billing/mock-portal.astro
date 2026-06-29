@@ -1,0 +1,27 @@
+---
+// In-app stand-in for the provider's billing portal, used only when
+// PAYMENTS_IMPL=mock. It plays the role of Stripe's customer portal: the member
+// can cancel here. The real Stripe test-mode portal replaces this page entirely;
+// a cancel there arrives via the customer.subscription.deleted webhook.
+const { user } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const customer = Astro.url.searchParams.get('customer') ?? '';
+const ret = Astro.url.searchParams.get('return') ?? '/account/billing';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mock billing portal &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Mock billing portal (dev only)</h1>
+    <p>Stand-in for the provider customer portal. Customer: <code>{customer}</code>.</p>
+    <form method="POST" action="/api/payments/mock-portal-cancel">
+      <button type="submit">Cancel membership</button>
+    </form>
+    <p><a href={ret}>Back to billing</a></p>
+  </body>
+</html>

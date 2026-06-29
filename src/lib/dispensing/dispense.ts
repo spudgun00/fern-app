@@ -8,6 +8,7 @@ import {
   getLatestDispenseRef,
   getLatestIntakeRef,
   insertFastQueueItem,
+  isActiveMember,
   recordDispenseRef,
   setDispenseRefStatus,
   type DispenseRef,
@@ -75,9 +76,13 @@ export interface TreatmentView {
   dispense: DispenseRef | null;
   status: DispenseStatus | null;
   tracking: DeliveryTracking | null;
-  // True once a script has been issued + dispensed at least once: the repeat
-  // entry is offered (P4 gates on a dispensed script; the membership / no-charge
-  // tiering arrives in P5).
+  // Whether this patient holds an active membership (drives the no-charge repeat
+  // tiering, P5).
+  isMember: boolean;
+  // True only when a script has been dispensed AND the patient is an active
+  // member: a member's repeat is membership-covered and goes through the queue
+  // with no new consult charge (P5 tiering). A dispensed non-member is prompted
+  // to subscribe instead.
   canRequestRepeat: boolean;
 }
 
@@ -109,20 +114,39 @@ export async function getTreatmentView(
     tracking = await dispensing.getDeliveryTracking(dispense.dispense_id);
   }
 
-  return { script, dispense, status, tracking, canRequestRepeat: Boolean(dispense) };
+  const isMember = await isActiveMember(admin, accountId);
+  return {
+    script,
+    dispense,
+    status,
+    tracking,
+    isMember,
+    canRequestRepeat: Boolean(dispense) && isMember,
+  };
 }
 
 // Lodge a repeat request: a member asks to repeat their last script. It writes a
 // repeat request to the core and enters the clinician review queue (a fresh
 // pending fast-lane queue_item pointing at the prior intake, so the console reads
-// the same clinical picture). P4 proves it ENTERS the queue; the re-approval loop
-// + membership / no-charge tiering land in P5.
+// the same clinical picture).
+//
+// P5 TIERING (the no-charge repeat): a repeat is membership-covered, so an ACTIVE
+// member lodges it with NO new consult charge. A non-member cannot ride free; the
+// route directs them to subscribe / pay first. The hard line still holds: a repeat
+// issues NO script on its own (the clinician still decides) — lodging only enters
+// the queue, it never charges and never prescribes.
 export async function lodgeRepeatRequest(
   admin: SupabaseClient,
   core: ClinicalCoreAdapter,
   accountId: string,
   corePatientId: string,
 ): Promise<{ requestId: string; queueItemId: string }> {
+  if (!(await isActiveMember(admin, accountId))) {
+    throw new Error(
+      'lodgeRepeatRequest: a no-charge repeat requires an active membership. Subscribe to continue.',
+    );
+  }
+
   const scripts = await core.getPrescriptions(corePatientId);
   const last = scripts[scripts.length - 1];
   if (!last) {

@@ -13,10 +13,14 @@
   "kv_namespaces": [{ "binding": "SESSION", "id": "3d1fc53e174843149f04bfb08aa9134e" }],
   // Non-secret impl flags only. IDENTITY_IMPL selects the IdentityAdapter; flip
   // to "stripe" once STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET are set via
-  // `wrangler secret put` (they are secrets, NEVER committed here).
+  // `wrangler secret put` (they are secrets, NEVER committed here). PAYMENTS_IMPL
+  // selects the PaymentsAdapter (P5); flip to "stripe" once STRIPE_SECRET_KEY (shared
+  // with Identity), STRIPE_PRICE_CONSULT, STRIPE_PRICE_MEMBERSHIP and
+  // STRIPE_BILLING_WEBHOOK_SECRET are set as secrets.
   "vars": {
     "CORE_IMPL": "mock",
     "DISPENSING_IMPL": "mock",
-    "IDENTITY_IMPL": "mock"
+    "IDENTITY_IMPL": "mock",
+    "PAYMENTS_IMPL": "mock"
   }
 }

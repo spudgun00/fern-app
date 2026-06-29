@@ -45,7 +45,11 @@ const isMock = env.DISPENSING_IMPL !== 'stripe' && env.DISPENSING_IMPL !== 'clou
   </head>
   <body>
     <h1>Your treatment</h1>
-    <p>Signed in as {user.email}. <a href="/intake">Back to intake</a> &middot; <a href="/logout">Log out</a></p>
+    <p>
+      Signed in as {user.email}. <a href="/intake">Back to intake</a> &middot;{' '}
+      <a href="/account/billing">Membership and billing</a> &middot;{' '}
+      <a href="/logout">Log out</a>
+    </p>
     {error && <p style="color: #b00">{error}</p>}
     {notice && <p style="color: #060">{notice}</p>}
 
@@ -100,16 +104,28 @@ const isMock = env.DISPENSING_IMPL !== 'stripe' && env.DISPENSING_IMPL !== 'clou
             )}
           </section>
 
-          {view.canRequestRepeat && (
+          {view.dispense && (
             <section>
               <h2>Repeat</h2>
-              <p>
-                If you are due to continue this treatment, you can request a
-                repeat. A clinician reviews every repeat before it is dispensed.
-              </p>
-              <form method="POST" action="/api/treatment/repeat">
-                <button type="submit">Request a repeat</button>
-              </form>
+              {view.canRequestRepeat ? (
+                <>
+                  <p>
+                    If you are due to continue this treatment, you can request a
+                    repeat. Your membership covers it at no extra consultation
+                    charge, and a clinician reviews every repeat before it is
+                    dispensed.
+                  </p>
+                  <form method="POST" action="/api/treatment/repeat">
+                    <button type="submit">Request a repeat</button>
+                  </form>
+                </>
+              ) : (
+                <p>
+                  Repeat prescriptions are covered by membership.{' '}
+                  <a href="/account/billing">Subscribe to membership</a> to request
+                  repeats reviewed by a clinician at no extra consultation charge.
+                </p>
+              )}
             </section>
           )}
 

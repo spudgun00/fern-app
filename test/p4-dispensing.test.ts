@@ -19,6 +19,7 @@ import {
   listPendingFastQueue,
   setCorePatientId,
   setJourney,
+  upsertMembership,
 } from '../src/lib/accounts';
 
 function fastLaneAnswers(): IntakeAnswers {
@@ -159,7 +160,11 @@ describe('mock dispensing status: submitted -> dispatched -> delivered reflects 
     expect(view.script?.id).toBe(rxId);
     expect(view.status?.status).toBe('delivered');
     expect((view.tracking?.events.length ?? 0)).toBeGreaterThanOrEqual(2);
-    expect(view.canRequestRepeat).toBe(true);
+    // A dispense exists (the repeat entry is gated on membership in P5, so this
+    // non-member sees the dispensed script but is not yet offered a repeat).
+    expect(Boolean(view.dispense)).toBe(true);
+    expect(view.isMember).toBe(false);
+    expect(view.canRequestRepeat).toBe(false);
   });
 });
 
@@ -168,14 +173,21 @@ describe('repeat request: a member lodges a repeat that enters the review queue'
     const { accountId, corePatientId, rxId } = await patientWithIssuedScript();
     await dispenseIssuedScript(admin, core, dispensing, { accountId, corePatientId, rxId });
 
-    const before = (await listPendingFastQueue(admin)).length;
+    // P5 tiering: a no-charge repeat requires an active membership. Grant it.
+    await upsertMembership(admin, accountId, {
+      status: 'active',
+      providerCustomerRef: 'mock_cus_p4',
+      providerSubscriptionRef: 'mock_sub_p4',
+    });
+
     const { requestId, queueItemId } = await lodgeRepeatRequest(admin, core, accountId, corePatientId);
     expect(requestId).toBeTruthy();
     expect(queueItemId).toBeTruthy();
 
-    // The repeat is now a pending fast-lane item in the clinician queue.
+    // The repeat is now a pending fast-lane item in the clinician queue. (The
+    // global queue may hold items from other concurrently-running tests, so assert
+    // this item is present rather than an exact count.)
     const queue = await listPendingFastQueue(admin);
-    expect(queue.length).toBe(before + 1);
     expect(queue.some((q) => q.id === queueItemId)).toBe(true);
 
     // The hard line holds: lodging a repeat issues NO script on its own (the
