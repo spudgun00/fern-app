@@ -1,0 +1,55 @@
+---
+// In-app stand-in for the provider's hosted booking page, used only when
+// BOOKING_IMPL=mock. It plays the role of Cal.com's hosted scheduler: the user
+// picks a slot here. No attendee details are entered or stored; this is a dev
+// affordance. The real Cal.com test-mode scheduler replaces this page entirely.
+const { user } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const booking = Astro.url.searchParams.get('booking') ?? '';
+const ret = Astro.url.searchParams.get('return') ?? '/consult/book/complete';
+
+// Offer a few near-future slots (whole hours over the next two days). The chosen
+// ISO time is posted to the confirm route, which marks the mock booking booked.
+const now = new Date();
+const slots: string[] = [];
+for (let day = 1; day <= 2; day++) {
+  for (const hour of [9, 11, 14]) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + day);
+    d.setHours(hour, 0, 0, 0);
+    slots.push(d.toISOString());
+  }
+}
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mock booking &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Mock booking (dev only)</h1>
+    <p>Stand-in for the provider hosted scheduler. No details are entered or stored.</p>
+    <form method="POST" action="/api/consult/book/mock-confirm">
+      <input type="hidden" name="booking" value={booking} />
+      <input type="hidden" name="return" value={ret} />
+      <fieldset>
+        <legend>Choose a consultation slot</legend>
+        {
+          slots.map((iso, i) => (
+            <p>
+              <label>
+                <input type="radio" name="slot" value={iso} required={i === 0} checked={i === 0} />
+                {new Date(iso).toLocaleString('en-GB')}
+              </label>
+            </p>
+          ))
+        }
+      </fieldset>
+      <button type="submit">Confirm booking (test)</button>
+    </form>
+    <p><a href="/consult">Cancel and go back</a></p>
+  </body>
+</html>

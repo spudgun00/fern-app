@@ -10,20 +10,23 @@ live only here. Authoritative spec: `docs/fern-patient-zone-build-spec.md` — r
 it before building. Build is phased (P0…P7); **build one phase, prove its success
 test on the deployed URL, then stop**. Do not build ahead of a passing test.
 
-Status: **P5 built** (payment + membership + repeat tiering — **money closes**),
+Status: **P6 built and proven** (full lane: booking + patient consult room +
+clinician consult console — **full lane closes; the initiation path is operable**),
 deployed at https://fern-app.jimgill.workers.dev. P0 (foundation + adapter spine +
 mocks), P1 (account + ID verification), P2 (two-lane intake + deterministic
-routing), P3 (clinician console — fast lane closes) and P4 (script to CloudRx +
-patient dispensing status — dispensing closes) done. Success tests A (`npm test`,
-55 passed) and B pass. P5's test proved on the deployed URL: paying the consult
-fee (mock Checkout) flips the `hasPaidConsult` gate; subscribing to membership
-(mock Checkout subscription) activates membership and advances `delivered ->
-active_member`; a member's repeat reaches the clinician review queue with no new
-consult charge while a non-member's repeat is gated; and cancelling via the
-(mock) portal flips membership to `canceled` (the member loses the no-charge
-repeat). P1's Test C (real Stripe Identity test-mode path) and P5's real Stripe
-Checkout/Billing path are both wired-but-unclosed (need the Stripe test secrets
-set, see below). P6+ not started.
+routing), P3 (clinician console — fast lane closes), P4 (script to CloudRx +
+patient dispensing status — dispensing closes) and P5 (payment + membership +
+repeat tiering — money closes) all done and proven. Success test A (`npm test`,
+**71 passed**) and B pass. P6's test proved on the deployed URL: a full-lane
+(initiation) intake routes to the assessed lane; paying the consult fee gates the
+booking; booking a slot (mock Cal.com) advances `intake_submitted -> consult_booked`
+and mints a video room; the patient and the clinician console resolve the SAME
+video room URL; the clinician issues a (mock) script from the consult and the
+patient advances `consult_done -> rx_issued -> dispensing` (treatment shows the
+script "Sent to the pharmacy"); the decided consult drops out of the consult queue.
+P1's Test C (real Stripe Identity test-mode path), P5's real Stripe Checkout/Billing
+path, and P6's real Cal.com + Daily paths are all wired-but-unclosed (need the test
+secrets set, see below). P7 not started.
 
 ## Stack
 
@@ -39,16 +42,20 @@ All clinical-record + dispensing operations go through one adapter interface so
 the app stays record-host-agnostic until the real core is chosen.
 
 - Adapters: `src/lib/adapters/` — `ClinicalCoreAdapter`, `DispensingAdapter`,
-  `IdentityAdapter`, `PaymentsAdapter`, `MockCore` (Supabase `mock_*` tables),
-  `MockCoreB` (in-memory), `MockDispensing`, `MockIdentity` (mock provider,
-  `mock_identity_*`), `MockPayments` (mock provider, `mock_payment_session`),
-  `StripeIdentity` and `StripePayments` (real, Stripe REST via fetch, no Node SDK).
+  `IdentityAdapter`, `PaymentsAdapter`, `BookingAdapter`, `VideoAdapter`,
+  `MockCore` (Supabase `mock_*` tables), `MockCoreB` (in-memory), `MockDispensing`,
+  `MockIdentity` (mock provider, `mock_identity_*`), `MockPayments` (mock provider,
+  `mock_payment_session`), `MockBooking` (mock provider, `mock_booking_session`),
+  `MockVideo` (stateless — the join URL derives from the room ref, no table),
+  `StripeIdentity` / `StripePayments` / `CalcomBooking` / `DailyVideo` (real, REST
+  via fetch, no Node SDK).
 - Factory: `getClinicalCore()` / `getDispensing()` / `getIdentity()` /
-  `getPayments()` pick the impl from `CORE_IMPL` / `DISPENSING_IMPL` /
-  `IDENTITY_IMPL` / `PAYMENTS_IMPL` (default `mock`). Never branch on the impl
-  anywhere else (the dev harness + the mock-confirm / mock-portal-cancel routes do
-  an `instanceof Mock*` check to complete the mock flow server-side; that is a
-  mock-only test affordance, not business logic).
+  `getPayments()` / `getBooking()` / `getVideo()` pick the impl from `CORE_IMPL` /
+  `DISPENSING_IMPL` / `IDENTITY_IMPL` / `PAYMENTS_IMPL` / `BOOKING_IMPL` /
+  `VIDEO_IMPL` (default `mock`). Never branch on the impl anywhere else (the dev
+  harness + the mock-confirm / mock-portal-cancel routes do an `instanceof Mock*`
+  check to complete the mock flow server-side; that is a mock-only test affordance,
+  not business logic).
 - Journey state machine: `src/lib/journey/`. Illegal transitions throw.
 - Intake routing (P2): `src/lib/intake/` — `routing.ts` is the deterministic,
   pure `routeIntake(answers)` (the single source of routing truth: fast / full /
@@ -133,6 +140,28 @@ account/`STRIPE_SECRET_KEY` as Identity.
    webhook activates membership + flips the consult gate; the
    `/account/billing/complete` poll is the idempotent fallback.
 Leave `PAYMENTS_IMPL=mock` to keep the no-keys mock billing walk working.
+
+**To activate the Cal.com booking path (P6):**
+1. Create a free Cal.com account + a consult event type; `wrangler secret put
+   CALCOM_API_KEY` (a Cal.com API key), `CALCOM_EVENT_TYPE_ID` (the consult event
+   type id) and `CALCOM_BOOKING_URL` (the public booking page, e.g.
+   `https://cal.com/fern/consult`).
+2. Add a Cal.com webhook subscribed to `BOOKING_CREATED` (+ `BOOKING_RESCHEDULED`)
+   pointing at `https://fern-app.jimgill.workers.dev/api/webhooks/calcom-booking`;
+   copy its signing secret into `wrangler secret put CALCOM_WEBHOOK_SECRET` (HMAC
+   over the raw body, header `X-Cal-Signature-256`). The booking page carries our
+   `metadata[fernRef]` correlation pointer so the webhook maps back to an account.
+3. Set `BOOKING_IMPL` to `calcom` in `wrangler.jsonc` `vars`, `npm run deploy`,
+   then walk `/consult` -> book a slot. The webhook advances the journey to
+   `consult_booked`; the `/consult/book/complete` poll is the idempotent fallback.
+Leave `BOOKING_IMPL=mock` to keep the no-keys mock booking walk working.
+
+**To activate the Daily video path (P6):** `wrangler secret put DAILY_API_KEY`
+(a Daily API key) and `DAILY_DOMAIN` (your `*.daily.co` subdomain). Set
+`VIDEO_IMPL` to `daily` in `wrangler.jsonc` `vars`, `npm run deploy`. Rooms are
+created per consult (idempotent by name) when a booking is finalised; both sides
+join `https://<DAILY_DOMAIN>.daily.co/<room>`. Leave `VIDEO_IMPL=mock` to keep the
+no-keys in-app mock room (`/consult/room/mock`) working.
 
 ## Runtime gotchas (cost real time in P0)
 
@@ -247,52 +276,79 @@ Leave `PAYMENTS_IMPL=mock` to keep the no-keys mock billing walk working.
 
 ## P5 done (payment + membership + repeat tiering — money closes)
 
-- **Added:** the money surface. A one-off consult fee (Stripe Checkout,
-  mode=payment, ~£100) and a recurring membership (Stripe Billing,
-  mode=subscription, ~£18/mo), the customer portal, and the first-vs-repeat
-  tiering rule, all behind a new `PaymentsAdapter` (mocked now). Closes **money**
-  on top of the P4 dispensing loop.
-- **Key pattern (the second external integration, mirrors Stripe Identity
-  exactly):** `PaymentsAdapter` interface + `MockPayments` (default, dev-walkable
-  via `mock_payment_session` + a `/account/billing/mock` checkout page) +
-  `StripePayments` (real, Stripe REST via `fetch`, NO Node SDK). Factory
-  `getPayments()` picks the impl from `PAYMENTS_IMPL` (default `mock`); never
-  branch on the impl elsewhere (the mock-confirm + mock-portal-cancel routes do an
-  `instanceof MockPayments` check to complete the mock flow server-side, a
-  mock-only test affordance like the identity one). The webhook
-  `/api/webhooks/stripe-billing` reuses the existing `verifyStripeWebhook` HMAC
-  check with its own `STRIPE_BILLING_WEBHOOK_SECRET`; the `/account/billing/complete`
-  return-page poll (`finaliseLatestPending`) is the idempotent fallback, exactly
-  as the identity webhook + verify/complete poll pair.
-- **The tiering rule, in code:** orchestration lives in `src/lib/payments/billing.ts`.
-  FIRST script = consult-priced: `hasPaidConsult(accountId)` is the gate the
-  full-lane booking (P6) will consult; P5 builds + proves it. REPEATS =
-  membership-covered: `lodgeRepeatRequest` now requires `isActiveMember` (a member
-  rides free into the queue; a non-member is gated to subscribe). Money only
-  GATES — paying never issues a script (a clinician still decides); decision and
-  payment stay separate, like decision and dispensing in P4.
-- **Journey machine untouched (spec-exact, no new states, no cycles):** membership
-  reaches `active_member` via the existing `delivered -> active_member` transition
-  (`advanceToActiveMemberIfEligible`, guarded + idempotent like
-  `finaliseVerification`). The `membership` table is the authoritative billing
-  status (`inactive | active | canceled`); a portal cancel flips it to `canceled`
-  (the journey is NOT rolled back — `active_member` is terminal — but `isActiveMember`
-  goes false, so a cancelled member loses the no-charge repeat).
-- **Boundary (hard line):** the app-DB `membership` table (P5 migration) + the
-  reused `payment_ref` (P0) hold POINTERS + coarse status ONLY
-  (`provider_customer_ref`, `provider_subscription_ref`, `status`). NO card data,
-  NO PII; the customer + payment method live with the provider (Stripe). A denylist
-  test asserts the `membership` column set never grows to card/PII detail (mirrors
-  the P2 intake_ref / P4 dispense_ref denylists).
-- **Proven on the live URL:** consult fee paid -> gate flips (`Consultation fee
-  paid`); subscribe -> membership active + journey `delivered -> active_member`;
-  member repeat -> enters the clinician queue as a fresh pending fast-lane item,
-  no new consult charge; non-member repeat -> gated; portal cancel -> membership
-  `canceled`, member repeat re-gated. `npm test`: 55 passed.
-- **Deferred (NOT built, same as P4 deferred the loop):** the full repeat
-  re-dispense CYCLE (clinician re-approves a repeat -> re-issue -> re-dispense)
-  needs non-spec journey cycles, so it is out of scope; P5 proves the repeat
-  ENTERS the queue with no charge (the P5 success test), nothing more.
+- **Added:** the money surface. The consult fee (~£100, Stripe Checkout) gates the
+  full-lane booking + first script; subscribing to membership (~£18/mo, Stripe
+  Billing) activates `active_member`; a member's repeat is no-charge but still
+  ENTERS the clinician queue (a clinician decides); cancelling in the portal pulls
+  the benefit. Closes **money** on the P4 dispensing loop.
+- **Key pattern (mirrors the Stripe Identity integration exactly):**
+  `PaymentsAdapter` + `MockPayments` / `StripePayments` behind `getPayments()` /
+  `PAYMENTS_IMPL` — Stripe REST via `fetch` (no Node SDK), an HMAC-verified webhook
+  (`/api/webhooks/stripe-billing`, own secret) with the `/account/billing/complete`
+  poll as idempotent fallback.
+- **Tiering rule (in `src/lib/payments/billing.ts`):** first script consult-priced
+  (`hasPaidConsult` gate); member repeats no-charge (`lodgeRepeatRequest` requires
+  `isActiveMember`); non-member / cancelled repeats gated. No path issues a script
+  — money only gates, a clinician still decides.
+- **Lines held:** journey machine untouched — `active_member` via the existing
+  `delivered ->` transition, no new states/cycles; `decideClinicianAction`
+  untouched (fast lane still closed); `membership` + reused `payment_ref` hold
+  POINTERS + coarse status only, no card data / PII (denylist test, like
+  intake_ref / dispense_ref). `npm test`: 55 passed; proven on the live URL.
+- **Deferred (as P4 deferred its loop):** the full repeat-and-re-dispense cycle
+  needs non-spec journey cycles; P5 only requires the repeat to enter the queue.
+
+## P6 built, proof pending (full lane: booking + consult room + consult console — full lane closes)
+
+- **Added:** the assessed / initiation lane — the clinically-primary first-script
+  path. A full-lane (or escalated) patient pays the consult fee (P5 gate), books a
+  slot (Cal.com, mocked behind `BookingAdapter`), joins a video room (Daily, mocked
+  behind `VideoAdapter`), and a clinician takes the SAME decision as P3 at the
+  consult. Closes the **full lane** end to end (intake -> book -> consult ->
+  clinician decision -> script -> dispense).
+- **Two new external integrations, same drill as Stripe Identity/Payments:**
+  `BookingAdapter` + `MockBooking`/`CalcomBooking` behind `getBooking()`/
+  `BOOKING_IMPL`; `VideoAdapter` + `MockVideo`/`DailyVideo` behind `getVideo()`/
+  `VIDEO_IMPL`. REST via `fetch` (no SDK), an HMAC-verified Cal.com webhook
+  (`/api/webhooks/calcom-booking`, `X-Cal-Signature-256`) with the
+  `/consult/book/complete` poll as idempotent fallback. `MockVideo` is stateless
+  (the join URL derives from the room ref).
+- **Booking orchestration** (`src/lib/consult/booking.ts`): `startConsultBooking`
+  is gated on `hasPaidConsult` (P5 tiering — the assessed first script follows a
+  paid consult) and a bookable state; `finaliseBooking` creates the video room +
+  advances `intake_submitted`/`escalated -> consult_booked` (idempotent with the
+  webhook).
+- **Key pattern (mirrors P3 exactly):** the full-lane decision lives in ONE
+  function, `decideConsultAction` (`src/lib/clinician/consult.ts`), the parallel of
+  `decideClinicianAction`. `rx_issued` is reachable ONLY through a clinician
+  **Issue** action (`issuePrescription` with `decisionState: 'consult_done'`, called
+  from that branch alone; the journey machine independently bars `rx_issued` from
+  any non-decision state). The `/api/clinician/consult-decide` route COMPOSES it
+  with `dispenseIssuedScript` on issue, exactly as the fast lane composes them.
+- **Action bar:** **Issue script | Refuse + signpost.** Escalate is omitted —
+  the assessed lane IS the fast lane's escalation target, so there is nowhere
+  further to escalate to; the hard line ("a clinician can always refuse or
+  escalate") is honoured by Refuse always being available.
+- **Machine change (minimal, hard line intact):** added ONE transition,
+  `consult_done -> refused`, so the clinician can refuse after a consult.
+  `RX_ISSUED_PREDECESSORS` stays exactly `{approved, consult_done}` and `refused`
+  stays terminal (proven by the journey test + a P6 machine test). No new journey
+  state / enum value.
+- **Boundary:** the app-DB `booking_ref` (P0 table, extended in P6) is POINTERS +
+  scheduling/decision status ONLY (`provider_ref`, `slot_at`, `room_ref`,
+  `decided_by`/`decided_at`/`note_ref`/`rx_ref`, `status` pending -> booked ->
+  issued|refused). The consult rationale + script live in the core; the call lives
+  with the video provider. A denylist test asserts the column set never grows to
+  clinical detail / card data / PII.
+- **Proven on the live URL:** an initiation intake routes to the full lane; the
+  booking is gated on the paid consult fee; booking a slot (mock) advances ->
+  `consult_booked` and mints a video room; the patient `/consult` page and the
+  clinician `/clinician/consult/[id]` console resolve the SAME room URL; the
+  clinician Issue advances `consult_done -> rx_issued -> dispensing` and the
+  script reaches the pharmacy ("Sent to the pharmacy" on `/treatment`); the
+  decided consult drops out of `/clinician/consults`. The refuse path
+  (`consult_done -> refused`) is proven by `test/p6-consult.test.ts`. `npm test`:
+  71 passed.
 
 ## Verifying
 

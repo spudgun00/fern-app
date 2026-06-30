@@ -1,0 +1,204 @@
+---
+// P6 clinician console — consult detail + the decision action bar (full lane).
+// Role-gated. Reads the patient's intake from the core (server-side, for display,
+// never copied app-side) and the video room join link, then offers the same hard
+// line as P3: Issue script | Refuse + signpost. Escalate is omitted because the
+// assessed lane is itself the escalation target. Every action requires a reason.
+import { createAdminClient } from '../../../lib/supabase/admin';
+import { getClinicalCore, getVideo } from '../../../lib/adapters/factory';
+import {
+  ensureAccount,
+  getAccountById,
+  getBookingRefById,
+  getJourney,
+  getLatestIntakeRef,
+} from '../../../lib/accounts';
+import { SYMPTOM_OPTIONS, SCREEN_QUESTIONS } from '../../../lib/intake/questionnaire';
+import type { IntakeAnswers, RoutingDecision } from '../../../lib/intake/routing';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role !== 'clinician') return Astro.redirect('/');
+
+const { id } = Astro.params;
+const ref = id ? await getBookingRefById(admin, id) : null;
+if (!ref) return Astro.redirect('/clinician/consults');
+
+const patient = await getAccountById(admin, ref.account_id);
+const journey = patient ? await getJourney(admin, patient.id) : null;
+
+// Read the patient's intake from the core (the clinical picture assessed in the
+// consult). The booking carries no clinical content; we resolve the intake via
+// the patient's latest intake_ref pointer.
+const core = getClinicalCore(env, admin);
+const intakeRef = patient ? await getLatestIntakeRef(admin, patient.id) : null;
+const intake = intakeRef ? await core.getIntake(intakeRef.intake_id) : null;
+const answers = (intake?.payload.answers as unknown as IntakeAnswers | undefined) ?? null;
+const routing = (intake?.payload.routing as RoutingDecision | undefined) ?? null;
+
+const video = getVideo(env, admin);
+const room = ref.room_ref ? await video.getRoom(ref.room_ref) : null;
+
+const error = Astro.url.searchParams.get('error');
+const decided = ref.status !== 'booked' || !!ref.decided_at;
+
+const symptomLabel = (symptomId: string) =>
+  SYMPTOM_OPTIONS.find((s) => s.id === symptomId)?.label ?? symptomId;
+const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consult &mdash; Fern clinician console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <p><a href="/clinician/consults">&larr; Back to the consult queue</a></p>
+    <h1>Assessed consultation</h1>
+    <p>Signed in as {user.email} (clinician). <a href="/logout">Log out</a></p>
+    {error && <p style="color: #b00">{error}</p>}
+
+    <p>
+      Patient (account ref): <code>{ref.account_id.slice(0, 8)}</code> &middot; slot:{' '}
+      <code>{ref.slot_at ? new Date(ref.slot_at).toLocaleString('en-GB') : '(unscheduled)'}</code>{' '}
+      &middot; booking status: <code>{ref.status}</code> &middot; journey state:{' '}
+      <code>{journey?.state}</code>
+    </p>
+
+    <h2>Video room</h2>
+    {
+      room ? (
+        <p>
+          <a href={room.joinUrl} target="_blank" rel="noopener">
+            Join the consultation video room &rarr;
+          </a>
+        </p>
+      ) : (
+        <p style="color: #b00">No video room is attached to this booking.</p>
+      )
+    }
+
+    {
+      decided && (
+        <p style="color: #060">
+          This consult has already been decided (<code>{ref.status}</code>). Decided at{' '}
+          {ref.decided_at ? new Date(ref.decided_at).toLocaleString('en-GB') : 'unknown'}.
+        </p>
+      )
+    }
+
+    <h2>Routing</h2>
+    <p>
+      Deterministic outcome: <code>{routing?.outcome ?? '(none)'}</code> &middot; lane:{' '}
+      <code>{routing?.lane ?? '(none)'}</code>
+    </p>
+    <ul>
+      {(routing?.reasons ?? []).map((r) => <li>{r}</li>)}
+    </ul>
+
+    <h2>Reported clinical picture</h2>
+    {
+      answers ? (
+        <dl>
+          <dt>Treatment history</dt>
+          <dd>
+            {answers.treatmentHistory === 'continuing'
+              ? 'Continuing / restarting'
+              : 'First-time initiation'}
+          </dd>
+
+          <dt>Symptoms</dt>
+          <dd>
+            {answers.symptoms.length === 0
+              ? '(none reported)'
+              : answers.symptoms.map(symptomLabel).join(', ')}
+          </dd>
+
+          <dt>Months since last period</dt>
+          <dd>{answers.monthsSinceLastPeriod ?? '(not given)'}</dd>
+
+          <dt>Blood pressure (self-reported)</dt>
+          <dd>
+            {answers.bpSystolic ?? '?'}/{answers.bpDiastolic ?? '?'} mmHg
+          </dd>
+
+          {SCREEN_QUESTIONS.map((q) => (
+            <>
+              <dt>{q.label}</dt>
+              <dd>{yesNo(answers[q.name] as boolean | undefined)}</dd>
+            </>
+          ))}
+        </dl>
+      ) : (
+        <p style="color: #b00">Could not read the patient's intake from the core.</p>
+      )
+    }
+
+    {
+      !decided && (
+        <>
+          <h2>Decision</h2>
+          <p>
+            A clinician makes this decision after the consultation. Issuing the
+            script prescribes; nothing is prescribed without this action. Every
+            decision records your reason.
+          </p>
+          <form method="POST" action="/api/clinician/consult-decide">
+            <input type="hidden" name="bookingRefId" value={ref.id} />
+
+            <p>
+              <label>
+                Clinical reason / rationale (recorded with every decision)
+                <br />
+                <textarea name="reason" rows="3" cols="60" required />
+              </label>
+            </p>
+
+            <fieldset>
+              <legend>Script to issue (used only when you issue)</legend>
+              <p>
+                <label>
+                  Medicine
+                  <br />
+                  <input
+                    type="text"
+                    name="rxName"
+                    value="Transdermal HRT (as assessed)"
+                    size="40"
+                  />
+                </label>
+              </p>
+              <p>
+                <label>
+                  Directions / dose
+                  <br />
+                  <input type="text" name="rxDose" value="Use as directed" size="40" />
+                </label>
+              </p>
+              <p>
+                <label>
+                  Quantity
+                  <br />
+                  <input type="number" name="rxQuantity" value="1" min="1" />
+                </label>
+              </p>
+            </fieldset>
+
+            <p>
+              <button type="submit" name="action" value="issue">
+                Issue script
+              </button>{' '}
+              <button type="submit" name="action" value="refuse">
+                Refuse + signpost
+              </button>
+            </p>
+          </form>
+        </>
+      )
+    }
+  </body>
+</html>

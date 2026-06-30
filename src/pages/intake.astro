@@ -77,8 +77,14 @@ const redFlagQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'redFlag');
           {journey?.state === 'escalated' && (
             <p>
               A clinician has reviewed your intake. The safer next step is an
-              assessed consultation with a clinician. Booking arrives in a later
-              step.
+              assessed consultation with a clinician.{' '}
+              <a href="/consult">Book your consultation &rarr;</a>
+            </p>
+          )}
+          {(journey?.state === 'consult_booked' || journey?.state === 'consult_done') && (
+            <p style="color: #060">
+              Your assessed consultation is booked.{' '}
+              <a href="/consult">Go to your consult room &rarr;</a>
             </p>
           )}
           {journey?.state === 'refused' && (
@@ -88,12 +94,14 @@ const redFlagQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'redFlag');
               advice sooner.
             </p>
           )}
-          {decision.outcome === 'full' && (
-            <p>
-              Based on your answers, the safer next step is an assessed
-              consultation with a clinician. Booking arrives in a later step.
-            </p>
-          )}
+          {decision.outcome === 'full' &&
+            (journey?.state === 'intake_submitted') && (
+              <p>
+                Based on your answers, the safer next step is an assessed
+                consultation with a clinician.{' '}
+                <a href="/consult">Book your consultation &rarr;</a>
+              </p>
+            )}
           {decision.outcome === 'stop' && decision.signpost && (
             <p style="color: #b00">
               We cannot continue your request here right now. {decision.signpost.message}{' '}

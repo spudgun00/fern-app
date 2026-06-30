@@ -1,0 +1,62 @@
+---
+// P6 clinician console — the consult queue (the full / assessed lane). Role-gated:
+// clinician only. Lists booked consults awaiting a decision, soonest slot first.
+// Driven by app-DB pointers (booking_ref); the clinical content for each is read
+// from the core on the detail page, never copied app-side. Unstyled plumbing.
+import { createAdminClient } from '../../lib/supabase/admin';
+import { ensureAccount, listPendingConsults } from '../../lib/accounts';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role !== 'clinician') return Astro.redirect('/');
+
+const consults = await listPendingConsults(admin);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consult queue &mdash; Fern clinician console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Clinician console &mdash; consult queue</h1>
+    <p>
+      Signed in as {user.email} (clinician). <a href="/clinician">Review queue (fast lane)</a>{' '}
+      &middot; <a href="/logout">Log out</a>
+    </p>
+    <p>Booked assessed-lane consultations awaiting a decision, soonest slot first.</p>
+
+    {
+      consults.length === 0 ? (
+        <p>No consultations are booked and awaiting a decision.</p>
+      ) : (
+        <table border="1" cellpadding="6" cellspacing="0">
+          <thead>
+            <tr>
+              <th>Slot</th>
+              <th>Patient (account ref)</th>
+              <th>Booked</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {consults.map((c) => (
+              <tr>
+                <td>{c.slot_at ? new Date(c.slot_at).toLocaleString('en-GB') : '(unscheduled)'}</td>
+                <td><code>{c.account_id.slice(0, 8)}</code></td>
+                <td>{new Date(c.created_at).toLocaleString('en-GB')}</td>
+                <td>
+                  <a href={`/clinician/consult/${c.id}`}>Open consult</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </body>
+</html>

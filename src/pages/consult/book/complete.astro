@@ -1,0 +1,53 @@
+---
+// Return page from the booking provider (and the mock flow). Polls the current
+// provider status and finalises: when booked, creates the video room and advances
+// intake_submitted/escalated -> consult_booked. For Cal.com the webhook is the
+// authoritative path; this poll is a belt-and-braces refresh, idempotent with it.
+import { createAdminClient } from '../../../lib/supabase/admin';
+import { getBooking, getVideo } from '../../../lib/adapters/factory';
+import { ensureAccount, getJourney } from '../../../lib/accounts';
+import { finaliseLatestBooking } from '../../../lib/consult/booking';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+
+let problem: string | null = null;
+try {
+  const booking = getBooking(env, admin);
+  const video = getVideo(env, admin);
+  await finaliseLatestBooking(admin, booking, video, account.id);
+} catch (err) {
+  problem = err instanceof Error ? err.message : String(err);
+}
+
+const journey = await getJourney(admin, account.id);
+const booked = journey?.state === 'consult_booked' || journey?.state === 'consult_done';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consult booking &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Consult booking</h1>
+    {problem && <p style="color: #b00">{problem}</p>}
+    <p>Journey state: <code>{journey?.state ?? '(none)'}</code></p>
+    {
+      booked ? (
+        <p>
+          Your consultation is booked. <a href="/consult">Go to your consult room &rarr;</a>
+        </p>
+      ) : (
+        <p>
+          Not confirmed yet. Booking can take a moment; reload this page, or{' '}
+          <a href="/consult">go back to booking</a>.
+        </p>
+      )
+    }
+  </body>
+</html>

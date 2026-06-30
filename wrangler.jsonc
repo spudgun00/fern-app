@@ -16,11 +16,17 @@
   // `wrangler secret put` (they are secrets, NEVER committed here). PAYMENTS_IMPL
   // selects the PaymentsAdapter (P5); flip to "stripe" once STRIPE_SECRET_KEY (shared
   // with Identity), STRIPE_PRICE_CONSULT, STRIPE_PRICE_MEMBERSHIP and
-  // STRIPE_BILLING_WEBHOOK_SECRET are set as secrets.
+  // STRIPE_BILLING_WEBHOOK_SECRET are set as secrets. BOOKING_IMPL selects the
+  // BookingAdapter (P6); flip to "calcom" once CALCOM_API_KEY, CALCOM_EVENT_TYPE_ID,
+  // CALCOM_BOOKING_URL and CALCOM_WEBHOOK_SECRET are set as secrets. VIDEO_IMPL
+  // selects the VideoAdapter (P6); flip to "daily" once DAILY_API_KEY + DAILY_DOMAIN
+  // are set as secrets.
   "vars": {
     "CORE_IMPL": "mock",
     "DISPENSING_IMPL": "mock",
     "IDENTITY_IMPL": "mock",
-    "PAYMENTS_IMPL": "mock"
+    "PAYMENTS_IMPL": "mock",
+    "BOOKING_IMPL": "mock",
+    "VIDEO_IMPL": "mock"
   }
 }

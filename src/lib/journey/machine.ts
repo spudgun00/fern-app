@@ -20,7 +20,13 @@ export const ALLOWED_TRANSITIONS: Record<JourneyState, readonly JourneyState[]> 
   escalated: ['consult_booked'], // re-route a fast-lane patient into the full lane
   refused: [], // terminal
   consult_booked: ['consult_done'],
-  consult_done: ['rx_issued'], // clinician decision -> script (the other allowed entry to rx_issued)
+  // The full-lane clinician decision (P6) is taken at consult_done: either issue
+  // the script (-> rx_issued, the SAME hard-line entry as P3's approve) or refuse
+  // and signpost (-> refused). Adding `refused` here honours the spec's hard line
+  // ("the clinician can always refuse or escalate") for the assessed lane without
+  // touching the rx_issued guard: RX_ISSUED_PREDECESSORS stays exactly
+  // {approved, consult_done}, and `refused` stays terminal.
+  consult_done: ['rx_issued', 'refused'],
   rx_issued: ['dispensing'],
   dispensing: ['delivered'],
   delivered: ['active_member'],

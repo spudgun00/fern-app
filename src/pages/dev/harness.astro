@@ -53,7 +53,14 @@ const journey = await getJourney(admin, account.id);
       <button type="submit">Become patient</button>
     </form>
     {account.role === 'clinician' && (
-      <p><a href="/clinician">Open the clinician review queue &rarr;</a></p>
+      <p>
+        <a href="/clinician">Open the clinician review queue (fast lane) &rarr;</a>
+        {' '}&middot;{' '}
+        <a href="/clinician/consults">Consult queue (full lane) &rarr;</a>
+      </p>
+    )}
+    {account.role === 'patient' && (
+      <p><a href="/consult">Open the patient consult surface (full lane) &rarr;</a></p>
     )}
   </body>
 </html>

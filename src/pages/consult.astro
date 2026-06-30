@@ -1,0 +1,126 @@
+---
+// P6 patient consult surface (the full / assessed lane). Branches on the journey
+// state: gate on the consult fee, then book a slot, then join the video room at
+// the slot. After the clinician's decision it points on to treatment, or shows
+// the refusal signpost. Unstyled plumbing; the design system arrives later.
+//
+// Describe-never-diagnose: copy states the next step plainly, never a diagnosis.
+import { createAdminClient } from '../lib/supabase/admin';
+import { getBooking, getVideo } from '../lib/adapters/factory';
+import { ensureAccount } from '../lib/accounts';
+import { getConsultView } from '../lib/consult/booking';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+if (!account.core_patient_id) return Astro.redirect('/account/profile');
+
+const booking = getBooking(env, admin);
+const video = getVideo(env, admin);
+const view = await getConsultView(admin, booking, video, account.id);
+
+const error = Astro.url.searchParams.get('error');
+const state = view.state;
+const inRoom = state === 'consult_booked' || state === 'consult_done';
+const pendingBooking = view.booking?.status === 'pending';
+const afterConsult =
+  state === 'rx_issued' || state === 'dispensing' || state === 'delivered' || state === 'active_member';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Your consultation &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Your consultation</h1>
+    <p>
+      Signed in as {user.email}. <a href="/intake">Back to intake</a> &middot;{' '}
+      <a href="/account/billing">Membership and billing</a> &middot; <a href="/logout">Log out</a>
+    </p>
+    {error && <p style="color: #b00">{error}</p>}
+
+    {
+      afterConsult ? (
+        <section>
+          <p style="color: #060">
+            Your consultation is complete and a clinician has issued your
+            prescription.{' '}
+            <a href="/treatment">View your treatment and dispensing status &rarr;</a>
+          </p>
+        </section>
+      ) : state === 'refused' ? (
+        <section>
+          <p style="color: #b00">
+            A clinician has reviewed your consultation and we cannot continue your
+            request here. Please speak to your GP, or call NHS 111 if you need
+            advice sooner.
+          </p>
+        </section>
+      ) : inRoom ? (
+        <section>
+          <h2>Your consult room</h2>
+          {view.slotAt && (
+            <p>
+              Your appointment: <strong>{new Date(view.slotAt).toLocaleString('en-GB')}</strong>.
+            </p>
+          )}
+          <p>
+            Join the video room at your appointment time. A clinician will join the
+            same room, review your intake with you, and decide the next step.
+          </p>
+          {view.joinUrl ? (
+            <p>
+              <a href={view.joinUrl} target="_blank" rel="noopener">
+                Join the video consultation &rarr;
+              </a>
+            </p>
+          ) : (
+            <p style="color: #b00">The room is being set up. Reload in a moment.</p>
+          )}
+          <p>Current status: <code>{state}</code></p>
+        </section>
+      ) : !view.consultPaid ? (
+        <section>
+          <h2>Pay for your consultation</h2>
+          <p>
+            An assessed first prescription follows a consultation with a clinician.
+            Pay the consultation fee, then book your slot.
+          </p>
+          <p><a href="/account/billing">Go to billing to pay the consultation fee &rarr;</a></p>
+        </section>
+      ) : pendingBooking ? (
+        <section>
+          <h2>Booking in progress</h2>
+          <p>
+            Your booking is being confirmed.{' '}
+            <a href="/consult/book/complete">Refresh booking status</a>.
+          </p>
+        </section>
+      ) : view.canBook ? (
+        <section>
+          <h2>Book your consultation</h2>
+          <p>
+            Your consultation fee is paid. Choose a slot with a clinician. The
+            consultation is by video; nothing is prescribed without it.
+          </p>
+          <form method="POST" action="/api/consult/book/start">
+            <button type="submit">Book your consult</button>
+          </form>
+        </section>
+      ) : (
+        <section>
+          <p>
+            The assessed consultation becomes available once your intake routes you
+            to the full lane. <a href="/intake">Go to intake</a>.
+          </p>
+          <p>Current status: <code>{state ?? '(none)'}</code></p>
+        </section>
+      )
+    }
+  </body>
+</html>

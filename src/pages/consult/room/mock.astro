@@ -1,0 +1,31 @@
+---
+// In-app stand-in for the embedded provider video room (Daily), used only when
+// VIDEO_IMPL=mock. It plays the role of the embedded call: both patient and
+// clinician "join" the same room ref here. No real call happens; this is a dev
+// affordance so the full-lane walk is end-to-end on the deployed URL. The real
+// Daily room replaces this page entirely.
+const { user } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const room = Astro.url.searchParams.get('room') ?? '';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mock consult room &mdash; Fern app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Mock consult room (dev only)</h1>
+    <p>Stand-in for the embedded video consultation. No real call takes place.</p>
+    <p>Room: <code>{room || '(none)'}</code></p>
+    <div
+      style="margin: 1rem 0; padding: 3rem 1rem; border: 1px dashed #999; text-align: center; background: #f4f4f4"
+    >
+      <p><strong>[ video would render here ]</strong></p>
+      <p>Both patient and clinician join this same room at the appointment time.</p>
+    </div>
+    <p><a href="/consult">&larr; Back to your consultation</a></p>
+  </body>
+</html>

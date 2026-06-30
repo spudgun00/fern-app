@@ -36,7 +36,10 @@ const rows = await Promise.all(
   </head>
   <body>
     <h1>Clinician console &mdash; review queue</h1>
-    <p>Signed in as {user.email} (clinician). <a href="/logout">Log out</a></p>
+    <p>
+      Signed in as {user.email} (clinician). <a href="/clinician/consults">Consult queue (full lane)</a>{' '}
+      &middot; <a href="/logout">Log out</a>
+    </p>
     <p>Fast-lane intakes awaiting an async review decision, oldest first.</p>
 
     {

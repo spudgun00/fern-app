@@ -605,3 +605,160 @@ export async function isActiveMember(db: SupabaseClient, accountId: string): Pro
   const m = await getMembership(db, accountId);
   return m?.status === 'active';
 }
+
+// ---------------------------------------------------------------------------
+// Booking pointer (P6, the full lane). booking_ref (P0 table, extended in P6) is
+// a POINTER + scheduling/decision status only: which account, a pointer into the
+// booking provider (provider_ref = the Cal.com booking / correlation id), the
+// booked slot time, a pointer to the video room (room_ref), a coarse status
+// (pending -> booked -> issued | refused), and (after the consult decision) WHO
+// decided, WHEN, and POINTERS to the core artifacts produced. The consult
+// rationale + the issued script live ONLY in the core; the call lives ONLY with
+// the video provider. No clinical detail, no card data, no PII.
+// ---------------------------------------------------------------------------
+export interface BookingRef {
+  id: string;
+  account_id: string;
+  provider_ref: string | null;
+  status: string;
+  slot_at: string | null;
+  room_ref: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  note_ref: string | null;
+  rx_ref: string | null;
+  created_at: string;
+}
+
+export async function recordBookingRef(
+  db: SupabaseClient,
+  accountId: string,
+  providerRef: string,
+  status: string = 'pending',
+): Promise<string> {
+  const { data, error } = await db
+    .from('booking_ref')
+    .insert({ account_id: accountId, provider_ref: providerRef, status })
+    .select('id')
+    .single();
+  if (error) throw new Error(`recordBookingRef: ${error.message}`);
+  return data.id as string;
+}
+
+export async function getBookingRefById(
+  db: SupabaseClient,
+  id: string,
+): Promise<BookingRef | null> {
+  const { data, error } = await db
+    .from('booking_ref')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`getBookingRefById: ${error.message}`);
+  return (data as BookingRef) ?? null;
+}
+
+export async function getLatestBookingRef(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<BookingRef | null> {
+  const { data, error } = await db
+    .from('booking_ref')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestBookingRef: ${error.message}`);
+  return (data as BookingRef) ?? null;
+}
+
+// The latest still-pending booking session for an account. The booking return
+// page reads this to finalise an in-flight booking via its provider_ref, mirroring
+// getLatestPendingPaymentRef.
+export async function getLatestPendingBookingRef(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<BookingRef | null> {
+  const { data, error } = await db
+    .from('booking_ref')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestPendingBookingRef: ${error.message}`);
+  return (data as BookingRef) ?? null;
+}
+
+export async function getBookingRefByProviderRef(
+  db: SupabaseClient,
+  providerRef: string,
+): Promise<BookingRef | null> {
+  const { data, error } = await db
+    .from('booking_ref')
+    .select('*')
+    .eq('provider_ref', providerRef)
+    .maybeSingle();
+  if (error) throw new Error(`getBookingRefByProviderRef: ${error.message}`);
+  return (data as BookingRef) ?? null;
+}
+
+// Mark a booking confirmed: status pending -> booked, with the chosen slot and
+// the created video room pointer. Pointers + scheduling only.
+export async function setBookingRefBooked(
+  db: SupabaseClient,
+  id: string,
+  slotAt: string | null,
+  roomRef: string,
+): Promise<void> {
+  const { error } = await db
+    .from('booking_ref')
+    .update({ status: 'booked', slot_at: slotAt, room_ref: roomRef })
+    .eq('id', id);
+  if (error) throw new Error(`setBookingRefBooked: ${error.message}`);
+}
+
+// The clinician consult queue: booked consults awaiting a decision (status
+// 'booked', not yet decided), oldest first. Driven by app-DB pointers; the
+// clinical content for each is read from the core for display, never copied here.
+export async function listPendingConsults(db: SupabaseClient): Promise<BookingRef[]> {
+  const { data, error } = await db
+    .from('booking_ref')
+    .select('*')
+    .eq('status', 'booked')
+    .is('decided_at', null)
+    .order('slot_at', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`listPendingConsults: ${error.message}`);
+  return (data as BookingRef[]) ?? [];
+}
+
+export interface ConsultDecision {
+  status: 'issued' | 'refused';
+  decidedBy: string;
+  noteRef: string;
+  rxRef?: string | null;
+}
+
+// Records the clinician consult decision against the booking_ref: the workflow
+// status, who decided, when, and pointers to the core note (and prescription on
+// issue). Mirrors recordQueueDecision for the fast lane.
+export async function recordConsultDecision(
+  db: SupabaseClient,
+  bookingRefId: string,
+  decision: ConsultDecision,
+): Promise<void> {
+  const { error } = await db
+    .from('booking_ref')
+    .update({
+      status: decision.status,
+      decided_by: decision.decidedBy,
+      decided_at: new Date().toISOString(),
+      note_ref: decision.noteRef,
+      rx_ref: decision.rxRef ?? null,
+    })
+    .eq('id', bookingRefId);
+  if (error) throw new Error(`recordConsultDecision: ${error.message}`);
+}
