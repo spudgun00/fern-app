@@ -48,7 +48,9 @@ transactional email DNS stays isolated from the live Brevo waitlist mail on the
 `fern.care` apex (no SPF collision). `npm test`: **103 passed** (94 -> 103; +9 D5
 adapter/template/never-gates tests). D5's live-URL proof (real emails to a test
 inbox with `EMAIL_IMPL=resend`) is pending the `mail.fern.care` Resend
-verification; D6-D7 not started. The corrected Fern design system is
+verification. **D6 is PARKED awaiting James's Stripe setup** (code verified ready,
+flags NOT flipped — see the "D6 PARKED" note below for the exact resume state). D7
+not started. The corrected Fern design system is
 vendored into `src/styles/tokens/` (a faithful copy of the marketing tokens with
 the cream ground corrected from the stale `#F4EFE5` to `#F8F7F0`; a test locks
 this). Shared shell in `src/layouts/Layout.astro` + `src/components/`
@@ -669,6 +671,50 @@ These survive into later phases. None blocks the spine; (a) is the one that matt
   unaffected. The mock path is built, proven by tests, and deployable now; the
   real-send proof needs the one-time Resend subdomain verification (see the
   activation block above). D6-D7 not started.
+
+## D6 PARKED — awaiting James's Stripe setup (resume cleanly from here)
+
+D6 (Stripe Identity + Checkout/Billing, test mode) is **green-lit but parked** so the
+build can continue. No code or flags changed; the working tree is clean of D6 wiring.
+Exact state to resume from:
+
+- **Code paths all verified present:** `src/lib/adapters/stripe-identity.ts` +
+  `stripe-payments.ts`, the two webhook routes, both `/complete` polls
+  (`account/verify/complete.astro`, `account/billing/complete.astro`). `env.ts` FAILS
+  LOUD on a missing secret when `*_IMPL=stripe` (throws `Missing required env var: …`),
+  so a premature flip 500s the deploy rather than silently mocking — do not flip until
+  the secrets below are set. `npm test`: **103 passed** (green baseline).
+- **Already set as live Worker secrets (from the P1 Identity proof):**
+  `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`. The Identity half is therefore
+  secret-ready; only the flag-flip + a dashboard check of the identity webhook remain.
+- **Still needed from James (the Payments half), in Stripe TEST mode:**
+  1. Two test Prices — a one-off ~£100 consult and a recurring ~£18/mo membership.
+  2. The billing webhook endpoint (route + events below) + the customer portal enabled.
+  3. `wrangler secret put` for the three secrets: `STRIPE_PRICE_CONSULT`,
+     `STRIPE_PRICE_MEMBERSHIP`, `STRIPE_BILLING_WEBHOOK_SECRET`.
+- **The flip happens ONLY after those three land:** set BOTH `IDENTITY_IMPL=stripe`
+  and `PAYMENTS_IMPL=stripe` together in `wrangler.jsonc` `vars`, then `npm run deploy`
+  (never a bare `wrangler deploy` — the adapter compiles `wrangler.jsonc` at build
+  time). Then the live-URL proof (test-mode ID check -> `id_verified`; consult Checkout
+  gates the booking; membership -> `active_member`; portal cancel -> benefit pulled).
+
+**Exact webhook wiring to tick in the Stripe dashboard:**
+
+- **Identity webhook** (already configured in P1 — confirm it still exists):
+  endpoint `https://fern-app.jimgill.workers.dev/api/webhooks/stripe-identity`,
+  events `identity.verification_session.*` (handler matches any
+  `identity.verification_session.` prefix). Signing secret -> `STRIPE_WEBHOOK_SECRET`
+  (already set). If the account/endpoint was rebuilt, re-add it and re-put the secret.
+- **Billing webhook** (new for D6): endpoint
+  `https://fern-app.jimgill.workers.dev/api/webhooks/stripe-billing`. The handler
+  (`src/pages/api/webhooks/stripe-billing.ts`) acts on EXACTLY these three event types,
+  so tick exactly these:
+  - `checkout.session.completed` (marks the payment paid; on `metadata.kind=membership`
+    upserts the membership + advances to `active_member`)
+  - `customer.subscription.updated` (acts only when the new `status` is `canceled`)
+  - `customer.subscription.deleted` (portal cancel -> `finaliseMembershipCancel`)
+  Signing secret -> `STRIPE_BILLING_WEBHOOK_SECRET` (distinct from the identity one).
+  This route is CSRF-exempt (JSON POST); its auth is the HMAC signature check.
 
 ## Verifying
 
