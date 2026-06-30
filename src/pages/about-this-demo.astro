@@ -38,8 +38,13 @@ const { user } = Astro.locals;
       </p>
     </div>
 
-    <div>
-      <a href="/" class="btn btn-pri">Enter the demo</a>
+    <div class="cta-row">
+      <a href="/demo" class="btn btn-pri">Pick a path and walk it</a>
+      <a href="/" class="btn btn-ghost">Enter the demo from the start</a>
     </div>
   </div>
 </Layout>
+
+<style>
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+</style>

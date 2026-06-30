@@ -35,9 +35,10 @@ P1's Test C (real Stripe Identity test-mode path), P5's real Stripe Checkout/Bil
 path, and P6's real Cal.com + Daily paths are all wired-but-unclosed (need the test
 secrets set, see below). P7 not started.
 
-**Demo track status: D3 built and proven** (D1 design foundation + app shell;
+**Demo track status: D4 built and proven** (D1 design foundation + app shell;
 D2 patient surfaces styled; D3 clinician surfaces styled + onboarding tail folded
-into the Fern shell). The corrected Fern design system is
+into the Fern shell; D4 demo personas + the self-walkable reviewer panel at `/demo`
++ the demo-data cleanup). The corrected Fern design system is
 vendored into `src/styles/tokens/` (a faithful copy of the marketing tokens with
 the cream ground corrected from the stale `#F4EFE5` to `#F8F7F0`; a test locks
 this). Shared shell in `src/layouts/Layout.astro` + `src/components/`
@@ -527,6 +528,74 @@ These survive into later phases. None blocks the spine; (a) is the one that matt
   out of the consult queue. The onboarding tail renders in full Fern. `npm test`:
   **80 passed** (D3 is presentation-only; its proof is the live-URL walk). D4–D7
   not started.
+
+## D4 done (demo personas + self-walkable path switcher + demo-data cleanup)
+
+- **Added:** a purpose-built, fully-styled reviewer panel at `/demo` that turns the
+  demo from "you drive it" into "a reviewer drives it themselves." It is separate
+  from `/dev/harness` (the raw dev tool stays as-is): `/demo` is the clean front
+  door to hand to a clinical lead. Reachable from `/about-this-demo` (which the
+  sitewide banner links to on every route).
+- **Six curated personas** (`src/lib/demo/personas.ts`, `PERSONAS`), each resetting
+  the logged-in account and seeding dummy data through the SAME adapters + journey
+  machine the app uses, landing the reviewer at the actionable point of one path:
+  **fast-approve** (continuing -> fast lane -> clinician approve -> dispensed),
+  **full-consult** (initiation -> full lane -> pay -> book -> room -> clinician
+  issue -> dispensed), **red-flag** (unexplained bleeding -> stop + GP signpost,
+  terminal), **escalate** (fast -> clinician escalate -> full lane), **refuse**
+  (fast -> clinician refuse -> terminal signpost), **cancel** (active member ->
+  portal cancel -> benefit pulled). Built on the existing scenario spine, not from
+  scratch. The panel also carries a role switch (patient <-> clinician on the one
+  account) and a "reset to a clean slate".
+- **Key pattern:** `applyPersona()` = `resetAndSweep()` + `seedOnboarding()`
+  (registered -> id_verified via the mock identity round-trip) + a per-persona seed
+  (`seedIntake` through `submitIntake`, or `seedActiveMember`), then sets the
+  landing role. Routes are thin: `/api/demo/persona` (apply, or `persona=reset`),
+  `/api/demo/role` (flip role, return to a `/`-path), `/api/demo/purge` (fenced
+  global purge).
+- **HARD LINE held (proven by `test/d4-personas.test.ts`):** no persona seed reaches
+  a prescribing state or issues a script — a persona drives the patient TO a
+  clinician decision; the clinician action (or the fenced dev step) still takes it.
+  `seedActiveMember` seeds a billing POSITION + an active membership pointer ONLY
+  (it places the journey at `active_member` via the raw setter for a billing-only
+  walk; it never calls `issuePrescription`, never mints an rx). The journey machine
+  + `decideClinicianAction` / `decideConsultAction` are untouched.
+- **Demo-data cleanup (folded into D4):** the demo touches ONLY the throwaway
+  namespaced `mock_*` tables (enumerated in `MOCK_TABLES`) and the per-account
+  app-DB pointer rows. `resetAndSweep(account)` runs on EVERY persona apply: it
+  sweeps that account's `mock_*` clinical rows (by `core_patient_id` / via the
+  `dispense_ref` -> `mock_dispense` pointers / by `account_id`) BEFORE clearing the
+  app-DB pointers, then resets the journey — so no stale `mock_*` leaks into the
+  next walk (a test proves a re-applied persona does not inherit the prior intake).
+  `purgeAllDemoData()` wipes every `mock_*` row across all accounts for a fresh
+  handover; the panel fences it (warn-tinted card, a `<details>` disclosure, a
+  required confirm checkbox) and the route rejects a POST without `confirm=purge`.
+  **By design this NEVER touches Supabase auth users** (James cleans those
+  separately, supervised) — the same mock-only boundary the whole build holds.
+- **Known wrinkle (not blocking, deliberately left in-track):** the clinician queue
+  (`listPendingFastQueue`) and consult queue are GLOBAL — they list pending items
+  across all accounts. On a DB with accumulated test/dev accounts the queues show
+  many cards; the global purge clears `mock_*` but NOT the app-DB `queue_item` /
+  `booking_ref` rows of abandoned accounts, so stale cards can persist (they read
+  "unknown" once their `mock_*` intake is purged). This is **resolved by the
+  supervised, manual auth-user + abandoned-account cleanup James runs out-of-band**
+  (the same one-off that removes leftover Supabase auth users): after it, a reviewer
+  on a clean handover sees only their own card. It is **deliberately NOT pruned by a
+  demo-panel button or the persona reset** — doing so would reach app-DB rows of
+  OTHER accounts, breaking the `mock_*`-only boundary this track holds (the demo
+  surface touches only throwaway `mock_*` data + the current account's own pointers,
+  never another account's app-DB state, never auth users). When driving a walk
+  programmatically, target your own item by matching `account_id.slice(0,8)` (the
+  `.qref` pill on each card).
+- **Proven on the live URL** (a throwaway in-browser signup gives a session; signup
+  bypasses email confirmation): from the styled `/demo` panel each of the six
+  personas walks to its terminal state on the real Fern surfaces — fast-approve and
+  full-consult both reach `/treatment` showing "issued by a clinician" + "Sent to
+  the pharmacy"; red-flag shows the stop + GP signpost; escalate lands the patient
+  at the full-lane consult pay-gate; refuse shows the terminal signpost; cancel
+  flips membership to cancelled; reset returns a clean slate; the global purge runs
+  (and is rejected without the confirm). `npm test`: **94 passed** (80 -> 94; +14
+  D4 persona/cleanup/hard-line tests). D5-D7 not started.
 
 ## Verifying
 
