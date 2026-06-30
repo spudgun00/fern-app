@@ -421,6 +421,47 @@ These survive into later phases. None blocks the spine; (a) is the one that matt
   one intake (e.g. fast-then-escalated, or a repeat). Tie the consult to a specific
   intake pointer when that becomes possible.
 
+## D2 done (patient surfaces styled — the patient happy path turns Fern)
+
+- **Added:** the whole patient happy path restyled onto the D1 shell + primitives
+  (`Layout`, `Nav` patient variant, the `card`/`field`/`btn`/`pill`/`notice`
+  primitives). The app's patient path stops looking like a harness and reads as
+  Fern end to end.
+- **Presentation only (the hard line for this phase):** every page's frontmatter
+  is unchanged bar adding the `Layout` import — no change to intake routing, the
+  consult pay-gate, journey transitions, or the `instanceof Mock*` mock-confirm
+  affordances. The styling wraps the existing logic, it does not touch it.
+- **Surfaces:** `intake` (the core questionnaire as styled fieldset cards; the
+  routing outcome as a next-step card + a "why this next step" panel, with the
+  describe-never-diagnose copy preserved), `consult` (pay-gate / book / room /
+  refusal branches), `consult/book/mock` (slot picker), `consult/book/complete`,
+  `consult/room/mock` (the video stand-in, now a navy stage), `treatment` (script
+  + dispensing + a tracking timeline + repeat + the fenced dev advance-control),
+  and `account/billing` (+ `billing/complete`, `billing/mock` checkout,
+  `billing/mock-portal`).
+- **Brand calls (held to the colors.css system):** periwinkle is a SURFACE never a
+  button — it carries the confirmation states as pills + `notice-info` (paid /
+  booked / approved / issued), not green; dispensing + lane status read as styled
+  **pills**; the mock provider stand-ins (checkout / scheduler / room / portal)
+  wear a **"Demo stand-in" pill** and the dev affordances stay clearly fenced. One
+  `notice-soft` neutral was added to `app.css` for in-progress holds. No new
+  palette, no warm-hardcoded leftovers.
+- **Proven on the live URL (full-lane walk):** intake (initiation) -> routes to the
+  full lane -> pay the consult fee (mock checkout) -> book a slot (mock) ->
+  `consult_booked` + minted room -> join the styled room -> a clinician issues at
+  the consult -> patient `/treatment` shows the script "Sent to the pharmacy";
+  every screen is Fern and the journey advanced exactly as before. `npm test`:
+  **80 passed** (D2 is presentation-only; its proof is the live-URL walk).
+
+### Open gap before D3 (do NOT lose this)
+
+- **The onboarding tail is still raw harness.** `account/verify/mock` and
+  `account/verify/complete` (and the verify start page's deeper states) are still
+  unstyled harness pages — they sit just before the D2 path during onboarding, so
+  a reviewer hits them. They were not in D1's proof set or D2's build list. Fold
+  them into the Fern shell in D3 (alongside the clinician surfaces) so the whole
+  walk, onboarding tail included, is styled.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and
