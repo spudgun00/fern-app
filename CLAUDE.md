@@ -716,6 +716,87 @@ Exact state to resume from:
   Signing secret -> `STRIPE_BILLING_WEBHOOK_SECRET` (distinct from the identity one).
   This route is CSRF-exempt (JSON POST); its auth is the HMAC signature check.
 
+### D6 PROVEN on the live URL (2026-06-30), flags then returned to mock
+
+D6 was flipped (`IDENTITY_IMPL=stripe` + `PAYMENTS_IMPL=stripe`), proven end to end in
+Stripe test mode, then flipped BACK to `mock` (the deployed demo stays keyless/reviewer-safe;
+the real path is proven-but-off). All four outcomes verified in the app DB: test-mode ID check
+-> `id_pending -> id_verified` (verified webhook); consult Checkout `4242` -> `payment_ref=paid`
+and the booking gate opened; membership subscribe -> `membership` row `active` with real
+`cus_`/`sub_` refs; immediate cancel -> `active -> canceled` via `customer.subscription.deleted`.
+
+- **FINDING — portal cancel policy (decide before real launch):** the Stripe customer portal
+  defaults to **cancel at period end** (`cancel_at_period_end=true`), which fires
+  `customer.subscription.updated` with `status` STILL `active` — NOT `deleted`. The
+  `stripe-billing` handler is correct to pull the benefit only on an ACTUAL cancellation
+  (`deleted`, or `updated` with `status==='canceled'`), so a period-end cancel leaves the
+  membership active until the period actually ends (proven: the portal cancel did not pull the
+  benefit; an immediate dashboard cancel did). Before real launch: (1) decide cancel-immediately
+  vs period-end policy and configure the portal to match; (2) for the period-end case, consider
+  recording a **'pending cancellation'** state (active-but-ending) so the UI can show it, rather
+  than silently staying `active` until `deleted` fires.
+
+## Before real launch — external config checklist (findings from the D5-D7 live proofs)
+
+These are PROVIDER-SIDE / config items surfaced while proving the real services in test mode.
+None is a code bug; all survive to go-live and must be settled before real care. The app code
++ adapter wiring + journey machine are proven correct against them.
+
+1. **Stripe portal cancel policy (D6).** The Stripe customer portal defaults to **cancel at
+   period end** (`cancel_at_period_end=true`), which fires `customer.subscription.updated` with
+   `status` still `active`, NOT `deleted`. The `stripe-billing` handler correctly pulls the
+   membership benefit only on an ACTUAL cancellation (`deleted`, or `updated` with
+   `status==='canceled'`), so a period-end cancel leaves membership `active` until the period
+   ends (an immediate dashboard cancel pulls it at once — both proven). BEFORE LAUNCH: decide
+   cancel-immediately vs period-end, configure the portal to match, and for the period-end case
+   consider a **'pending cancellation'** state (active-but-ending) so the UI can show it. (Fuller
+   detail in the D6 PROVEN note above.)
+2. **`DAILY_DOMAIN` must be the SUBDOMAIN only (D7).** The DailyVideo adapter builds the join URL
+   as `https://${DAILY_DOMAIN}.daily.co/${room}` (`daily-video.ts` `joinUrl`), so `DAILY_DOMAIN`
+   must be just the subdomain (e.g. `ferncare`), NOT the full domain. It had been set to the full
+   `ferncare.daily.co`, producing a doubled `ferncare.daily.co.daily.co/...` URL that would not
+   open. FIXED 2026-06-30 (`wrangler secret put DAILY_DOMAIN` = `ferncare`, redeployed). The join
+   URL is computed at render time from `room_ref` + the secret, so the fix needs no re-booking.
+   Keep this value as the bare subdomain at go-live.
+3. **Daily account needs a payment method (D7).** Loading a real room URL returned Daily's
+   **"Missing payment method — add a payment method to use Daily"** page. Room CREATION via the
+   API succeeds, but rooms will not SERVE/join until a payment method is on the Daily account.
+   This is account billing, not code. BEFORE LAUNCH (and before the live video proof): add a
+   payment method in the Daily Dashboard (confirm it unlocks the intended free tier / card-to-
+   verify rather than a paid plan). RESOLVED for the test account 2026-06-30 (free-tier card on
+   file: 10,000 participant-min/mo, usage-based above, no fixed fee) — the room then opened. The
+   real go-live Daily account will need the same.
+4. **Private consult rooms + per-participant meeting tokens (D7) — IMPLEMENTED 2026-06-30.** Daily
+   rooms are created `privacy: 'private'` (the correct model for a confidential consult), so the
+   bare room URL is denied ("You are not allowed to join this meeting"). `DailyVideo` now mints a
+   per-participant **meeting token** (`POST /meeting-tokens`, room-scoped) per render and appends
+   `?t=<token>` to the join URL; both patient and clinician get their own token, and the room opens
+   to Daily's prejoin UI (proven on the live URL with a real booking). This is the ONE place where
+   the demo runs DIFFERENT code from a mock (public-vs-private is a real go-live difference), so it
+   was done properly rather than as a public link-only room. Contained entirely in `daily-video.ts`
+   (no interface/caller change; tests use `MockVideo`, unaffected; 103 pass). DEFERRED go-live
+   enhancements (intentionally out of scope to keep the change contained): token `exp` tied to the
+   appointment window; `is_owner: true` for the clinician (host controls: eject, recording, waiting
+   room — needs the role passed into `getRoom`); `user_name` for the prejoin display.
+5. **`RESEND_API_KEY` must be a live Worker secret before flipping `EMAIL_IMPL=resend` (D5).**
+   `env.ts` fails loud (env.ts:145, `Missing required env var: RESEND_API_KEY`) when
+   `EMAIL_IMPL=resend` and the key is absent, so a premature flip **500s the WHOLE app on every
+   route** (not just email). During the D5 proof the key was believed-set but was NOT in
+   `wrangler secret list` for `fern-app`, so the flip took the live demo down until it was
+   restored to `mock`; it came back the moment `RESEND_API_KEY` was actually `wrangler secret
+   put`. BEFORE flipping: confirm `RESEND_API_KEY` is in `wrangler secret list`. (`EMAIL_FROM` is
+   optional — defaults to `Fern <noreply@mail.fern.care>`.) The mock default never has this risk.
+6. **Email HTML quoted-printable escaping (D5) — minor, verify before go-live.** The DELIVERED
+   mail (verified in Gmail) shows a stray replacement char in the non-rendered `<head>` viewport
+   meta: `width=device-width` arrives as `width<U+FFFD>vice-width` (the `=de` got decoded as a QP
+   hex byte), which means the HTML's literal `=` signs may not be quoted-printable-escaped on send
+   (Resend/adapter). It is invisible (head only) and the three templates render perfectly in Gmail
+   (navy band + lime dot, periwinkle status surface, navy button, no Article 9), and the button
+   URLs carry no `=`. But a future link with a `?x=<hex>` query param could be corrupted, so check
+   the send transfer-encoding before go-live. D5 PROVEN on the live URL 2026-06-30: all three sends
+   (welcome/consult-booked/script-shipped) delivered from `noreply@mail.fern.care` to the test
+   inbox (not spam), Fern HTML intact, no clinical content; flags then returned to `mock`.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and
