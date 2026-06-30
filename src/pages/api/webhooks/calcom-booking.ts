@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
 import { verifyCalcomWebhook } from '../../../lib/calcom-webhook';
-import { getBooking, getVideo } from '../../../lib/adapters/factory';
+import { getBooking, getVideo, getEmail } from '../../../lib/adapters/factory';
 import { getBookingRefByProviderRef } from '../../../lib/accounts';
 import { finaliseBooking } from '../../../lib/consult/booking';
 
@@ -41,7 +41,10 @@ export const POST: APIRoute = async (ctx) => {
       if (ref) {
         const booking = getBooking(env, admin);
         const video = getVideo(env, admin);
-        await finaliseBooking(admin, booking, video, ref.account_id, ref);
+        await finaliseBooking(admin, booking, video, ref.account_id, ref, {
+          email: getEmail(env, admin),
+          baseUrl: new URL(ctx.request.url).origin,
+        });
       }
     }
   }

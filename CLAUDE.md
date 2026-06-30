@@ -35,10 +35,20 @@ P1's Test C (real Stripe Identity test-mode path), P5's real Stripe Checkout/Bil
 path, and P6's real Cal.com + Daily paths are all wired-but-unclosed (need the test
 secrets set, see below). P7 not started.
 
-**Demo track status: D4 built and proven** (D1 design foundation + app shell;
+**Demo track status: D5 built, proof pending** (D1 design foundation + app shell;
 D2 patient surfaces styled; D3 clinician surfaces styled + onboarding tail folded
 into the Fern shell; D4 demo personas + the self-walkable reviewer panel at `/demo`
-+ the demo-data cleanup). The corrected Fern design system is
++ the demo-data cleanup; **D5 transactional email** — the new `EmailAdapter` +
+`MockEmail`/`ResendEmail` behind `getEmail()`/`EMAIL_IMPL`, Fern-styled welcome /
+consult-booked / script-shipped emails composed as non-clinical side effects at the
+journey events, default `mock` logs server-side for the zero-keys walk). The
+**provider decision** (taken at the top of D5): Resend, sending from a VERIFIED
+SUBDOMAIN `noreply@mail.fern.care` — a subdomain, not the apex, so the app's
+transactional email DNS stays isolated from the live Brevo waitlist mail on the
+`fern.care` apex (no SPF collision). `npm test`: **103 passed** (94 -> 103; +9 D5
+adapter/template/never-gates tests). D5's live-URL proof (real emails to a test
+inbox with `EMAIL_IMPL=resend`) is pending the `mail.fern.care` Resend
+verification; D6-D7 not started. The corrected Fern design system is
 vendored into `src/styles/tokens/` (a faithful copy of the marketing tokens with
 the cream ground corrected from the stale `#F4EFE5` to `#F8F7F0`; a test locks
 this). Shared shell in `src/layouts/Layout.astro` + `src/components/`
@@ -236,6 +246,25 @@ Leave `BOOKING_IMPL=mock` to keep the no-keys mock booking walk working.
 created per consult (idempotent by name) when a booking is finalised; both sides
 join `https://<DAILY_DOMAIN>.daily.co/<room>`. Leave `VIDEO_IMPL=mock` to keep the
 no-keys in-app mock room (`/consult/room/mock`) working.
+
+**To activate the Resend email path (D5):**
+1. Create a free Resend account. **Verify a SUBDOMAIN of fern.care, not the apex.**
+   The apex (`fern.care`) already sends the marketing waitlist email via Brevo;
+   verifying the app's transactional email on the apex too risks an SPF collision
+   between two senders. Verify `mail.fern.care` (add Resend's MX/TXT/DKIM records
+   for that subdomain only) so the app's email DNS stays fully separate from the
+   live Brevo apex mail. `wrangler secret put RESEND_API_KEY` (a `re_…` key);
+   server-only, never `PUBLIC_`. `EMAIL_FROM` defaults to
+   `Fern <noreply@mail.fern.care>`; override it (a non-secret `var`) only to change
+   the sender. Until the subdomain is verified, Resend sends only to your own
+   account address — fine for a first proof.
+2. Set `EMAIL_IMPL` to `resend` in `wrangler.jsonc` `vars`, `npm run deploy`, then
+   sign up (welcome), book a consult (consult booked) and have a clinician issue
+   (script shipped). Each send is a non-clinical side effect: it fires exactly once
+   at the journey event, carries status + next step only (no Article 9), and a
+   failed send logs without blocking the flow.
+Leave `EMAIL_IMPL=mock` to keep the no-keys demo whole — the mock logs the composed
+email server-side (visible in `wrangler tail`) and the walk is unaffected.
 
 ## Runtime gotchas (cost real time in P0)
 
@@ -596,6 +625,50 @@ These survive into later phases. None blocks the spine; (a) is the one that matt
   flips membership to cancelled; reset returns a clean slate; the global purge runs
   (and is rejected without the confirm). `npm test`: **94 passed** (80 -> 94; +14
   D4 persona/cleanup/hard-line tests). D5-D7 not started.
+
+## D5 built, proof pending (transactional email — the one missing realism piece)
+
+- **Decision taken at the top of D5 (provider + domain):** **Resend**, sending
+  from a **verified subdomain** `Fern <noreply@mail.fern.care>` — NOT the
+  `fern.care` apex. The apex already sends the marketing waitlist email via Brevo;
+  verifying the app's transactional email on a separate subdomain keeps the two
+  senders' DNS apart and avoids an SPF collision, while reading just as clean to a
+  recipient. Resend free tier (3,000/mo) is ample; until the subdomain is verified
+  Resend sends only to your own account address (fine for a first proof).
+- **Added (same drill as the other adapters):** `EmailAdapter` (`src/lib/adapters/
+  email.ts`) + `MockEmail` (logs the composed message server-side + records it for
+  tests; the zero-keys walk) / `ResendEmail` (REST via `fetch`, no SDK) behind
+  `getEmail()` / `EMAIL_IMPL` (default `mock`). New env: `EMAIL_IMPL` (`vars`,
+  default `mock`), `RESEND_API_KEY` (secret, required ONLY when `EMAIL_IMPL=resend`),
+  `EMAIL_FROM` (non-secret, defaults to the `mail.fern.care` sender). Fern-styled
+  templates in `src/lib/email/templates.ts` (navy header band + lime wordmark dot,
+  cream ground, periwinkle status surface, the navy next-step button; British
+  English, no emoji; email-safe inline HTML, no webfont dependency).
+- **Three sends, hooked at the existing journey events (compose, do not entangle):**
+  **welcome** at `api/auth/signup.ts` (account created), **consult booked** inside
+  `finaliseBooking` right after `-> consult_booked`, **script shipped** inside
+  `dispenseIssuedScript` right after `rx_issued -> dispensing`. The notify layer
+  (`src/lib/email/notify.ts`) resolves the recipient (account -> auth user email),
+  composes the template, and SWALLOWS any failure. The booking + dispense functions
+  take an OPTIONAL `notify` param (omitted by tests + seeding, so neither emails);
+  the send fires EXACTLY ONCE because it sits inside the one-time transition branch
+  (a re-poll / webhook re-fire finds the patient already advanced and skips).
+- **HARD LINE held (proven by `test/d5-email.test.ts`, 9 tests):** email is a
+  NON-CLINICAL side effect — **no journey transition depends on a send, and a failed
+  send never blocks a flow** (a throwing adapter still advances `rx_issued ->
+  dispensing`; a throwing send through the notify helper resolves normally). Bodies
+  carry **status + next step only, no Article 9** — a denylist test asserts no
+  clinical term (medication names, symptoms, dose, "menopause"/"HRT", red-flag
+  terms) appears in any template; the welcome copy was de-conditioned to
+  "your care" since an inbox is less protected than an authenticated screen. The
+  journey machine + `decideClinicianAction`/`decideConsultAction` are untouched.
+- **Proof pending (the live-URL walk):** with `EMAIL_IMPL=resend` + `RESEND_API_KEY`
+  set and `mail.fern.care` verified in Resend, sign-up / booking / dispatch each
+  deliver the real Fern-styled email to a test inbox; with `EMAIL_IMPL=mock` the
+  same steps log the composed email server-side (`wrangler tail`) and the flow is
+  unaffected. The mock path is built, proven by tests, and deployable now; the
+  real-send proof needs the one-time Resend subdomain verification (see the
+  activation block above). D6-D7 not started.
 
 ## Verifying
 

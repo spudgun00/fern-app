@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ClinicalCoreAdapter, Rx } from '../adapters/clinical-core';
 import type { DispensingAdapter, DeliveryTracking, DispenseStatus } from '../adapters/dispensing';
+import type { EmailAdapter } from '../adapters/email';
 import { MockDispensing } from '../adapters/mock-dispensing';
+import { sendScriptShippedEmail } from '../email/notify';
 import {
   advanceJourney,
   getJourney,
@@ -35,6 +37,14 @@ export interface DispenseResult {
   status: string;
 }
 
+// Optional email notification, composed (never gating) with the dispense. When
+// supplied, a "script shipped" email is sent exactly once, right after the journey
+// advances rx_issued -> dispensing. Omitted by tests; a failed send is swallowed.
+export interface DispenseNotify {
+  email: EmailAdapter;
+  baseUrl: string;
+}
+
 // Transmit an already-issued script (the patient sits at rx_issued) to the
 // dispensing provider, record the app-DB pointer, and advance rx_issued ->
 // dispensing. The journey machine independently bars this from any state other
@@ -45,6 +55,7 @@ export async function dispenseIssuedScript(
   core: ClinicalCoreAdapter,
   dispensing: DispensingAdapter,
   input: { accountId: string; corePatientId: string; rxId: string },
+  notify?: DispenseNotify,
 ): Promise<DispenseResult> {
   // Look up the issued script in the core so the pharmacy record is complete.
   // The items stay behind the dispensing adapter (the CloudRx boundary), never
@@ -67,6 +78,12 @@ export async function dispenseIssuedScript(
   // rx_issued -> dispensing. Throws IllegalTransitionError if the patient is not
   // at rx_issued (defence in depth beyond the route ordering).
   await advanceJourney(admin, input.accountId, 'dispensing');
+
+  // Notify exactly once: the advance above throws on a repeat, so we only reach
+  // here on the real transition. Email never gates — the helper swallows failures.
+  if (notify) {
+    await sendScriptShippedEmail(admin, notify.email, input.accountId, notify.baseUrl);
+  }
 
   return { rxId: input.rxId, dispenseId, status: 'submitted' };
 }

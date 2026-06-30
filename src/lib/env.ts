@@ -15,6 +15,7 @@ export interface AppEnv {
   PAYMENTS_IMPL: string;
   BOOKING_IMPL: string;
   VIDEO_IMPL: string;
+  EMAIL_IMPL: string;
   // Stripe Identity (test mode in P1). Required ONLY when IDENTITY_IMPL=stripe;
   // server-only, never PUBLIC_, never in a client bundle.
   STRIPE_SECRET_KEY?: string;
@@ -38,7 +39,15 @@ export interface AppEnv {
   // DAILY_DOMAIN is the *.daily.co subdomain rooms are created under. Server-only.
   DAILY_API_KEY?: string;
   DAILY_DOMAIN?: string;
+  // Transactional email (D5). Required ONLY when EMAIL_IMPL=resend. RESEND_API_KEY
+  // is a server-only secret (never PUBLIC_). EMAIL_FROM is the verified Resend
+  // sender, a subdomain of fern.care (default `Fern <noreply@mail.fern.care>`) so
+  // the app's email DNS stays isolated from the Brevo waitlist mail on the apex.
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
 }
+
+const DEFAULT_EMAIL_FROM = 'Fern <noreply@mail.fern.care>';
 
 const REQUIRED = [
   'PUBLIC_SUPABASE_URL',
@@ -78,6 +87,9 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const calcomWebhookSecret = get('CALCOM_WEBHOOK_SECRET');
   const dailyApiKey = get('DAILY_API_KEY');
   const dailyDomain = get('DAILY_DOMAIN');
+  const emailImpl = String(get('EMAIL_IMPL') ?? 'mock');
+  const resendApiKey = get('RESEND_API_KEY');
+  const emailFrom = get('EMAIL_FROM');
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
   // keeping them out of REQUIRED lets mock dev + tests run without them.
@@ -127,6 +139,14 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     }
   }
 
+  // The Resend key is required ONLY when EMAIL_IMPL=resend; the mock (default)
+  // logs server-side and needs no key, so the no-keys reviewer walk always works.
+  if (emailImpl === 'resend') {
+    if (!resendApiKey) {
+      throw new Error('Missing required env var: RESEND_API_KEY (EMAIL_IMPL=resend)');
+    }
+  }
+
   return {
     PUBLIC_SUPABASE_URL: String(get('PUBLIC_SUPABASE_URL')),
     PUBLIC_SUPABASE_ANON_KEY: String(get('PUBLIC_SUPABASE_ANON_KEY')),
@@ -150,5 +170,8 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     CALCOM_WEBHOOK_SECRET: calcomWebhookSecret != null ? String(calcomWebhookSecret) : undefined,
     DAILY_API_KEY: dailyApiKey != null ? String(dailyApiKey) : undefined,
     DAILY_DOMAIN: dailyDomain != null ? String(dailyDomain) : undefined,
+    EMAIL_IMPL: emailImpl,
+    RESEND_API_KEY: resendApiKey != null ? String(resendApiKey) : undefined,
+    EMAIL_FROM: emailFrom != null ? String(emailFrom) : DEFAULT_EMAIL_FROM,
   };
 }

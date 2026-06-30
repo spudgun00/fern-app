@@ -5,7 +5,7 @@
 // authoritative path; this poll is a belt-and-braces refresh, idempotent with it.
 import Layout from '../../../layouts/Layout.astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
-import { getBooking, getVideo } from '../../../lib/adapters/factory';
+import { getBooking, getVideo, getEmail } from '../../../lib/adapters/factory';
 import { ensureAccount, getJourney } from '../../../lib/accounts';
 import { finaliseLatestBooking } from '../../../lib/consult/booking';
 
@@ -19,7 +19,10 @@ let problem: string | null = null;
 try {
   const booking = getBooking(env, admin);
   const video = getVideo(env, admin);
-  await finaliseLatestBooking(admin, booking, video, account.id);
+  await finaliseLatestBooking(admin, booking, video, account.id, {
+    email: getEmail(env, admin),
+    baseUrl: new URL(Astro.request.url).origin,
+  });
 } catch (err) {
   problem = err instanceof Error ? err.message : String(err);
 }

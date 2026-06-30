@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
-import { getClinicalCore, getDispensing } from '../../../lib/adapters/factory';
+import { getClinicalCore, getDispensing, getEmail } from '../../../lib/adapters/factory';
 import { ensureAccount } from '../../../lib/accounts';
 import { decideConsultAction, type ConsultAction } from '../../../lib/clinician/consult';
 import { dispenseIssuedScript } from '../../../lib/dispensing/dispense';
@@ -58,11 +58,17 @@ export const POST: APIRoute = async (ctx) => {
     // fast lane uses. Decision and transmission stay separate; the route composes.
     if (result.action === 'issue' && result.rxId) {
       const dispensing = getDispensing(env, admin);
-      await dispenseIssuedScript(admin, core, dispensing, {
-        accountId: result.patientAccountId,
-        corePatientId: result.corePatientId,
-        rxId: result.rxId,
-      });
+      await dispenseIssuedScript(
+        admin,
+        core,
+        dispensing,
+        {
+          accountId: result.patientAccountId,
+          corePatientId: result.corePatientId,
+          rxId: result.rxId,
+        },
+        { email: getEmail(env, admin), baseUrl: new URL(ctx.request.url).origin },
+      );
     }
   } catch (err) {
     return ctx.redirect(

@@ -17,6 +17,9 @@ import { MockBooking } from './mock-booking';
 import { CalcomBooking } from './calcom-booking';
 import { MockVideo } from './mock-video';
 import { DailyVideo } from './daily-video';
+import type { EmailAdapter } from './email';
+import { MockEmail } from './mock-email';
+import { ResendEmail } from './resend-email';
 
 // Selects the implementation purely from the env flag. The rest of the app
 // (routes, harness, tests) only ever talks to the interface, so swapping the
@@ -84,5 +87,17 @@ export function getVideo(env: AppEnv, _db: SupabaseClient): VideoAdapter {
     case 'mock':
     default:
       return new MockVideo();
+  }
+}
+
+// Email needs no db (it transmits a composed message, holds no app state). The
+// mock logs server-side for the zero-keys walk; resend sends via the REST API.
+export function getEmail(env: AppEnv, _db?: SupabaseClient): EmailAdapter {
+  switch (env.EMAIL_IMPL) {
+    case 'resend':
+      return new ResendEmail(env.RESEND_API_KEY ?? '', env.EMAIL_FROM ?? '');
+    case 'mock':
+    default:
+      return new MockEmail();
   }
 }

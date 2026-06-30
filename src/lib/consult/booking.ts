@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BookingAdapter } from '../adapters/booking';
 import type { VideoAdapter } from '../adapters/video';
+import type { EmailAdapter } from '../adapters/email';
+import { sendConsultBookedEmail } from '../email/notify';
 import {
   advanceJourney,
   getJourney,
@@ -74,6 +76,15 @@ export interface BookingFinalisation {
   booked: boolean;
 }
 
+// Optional email notification, composed (never gating) with the booking finalise.
+// When supplied, a "consult booked" email is sent exactly once, right after the
+// journey advances to consult_booked. Omitted by tests + any caller that does not
+// notify; a failed send is swallowed inside the notify helper.
+export interface BookingNotify {
+  email: EmailAdapter;
+  baseUrl: string;
+}
+
 // The return-page entry point: finalise whatever booking is in flight for this
 // account (the latest pending booking_ref). Idempotent with the webhook and safe
 // to call on every load of the return page. Returns null if nothing is pending.
@@ -82,10 +93,11 @@ export async function finaliseLatestBooking(
   booking: BookingAdapter,
   video: VideoAdapter,
   accountId: string,
+  notify?: BookingNotify,
 ): Promise<BookingFinalisation | null> {
   const pending = await getLatestPendingBookingRef(admin, accountId);
   if (!pending?.provider_ref) return null;
-  return finaliseBooking(admin, booking, video, accountId, pending);
+  return finaliseBooking(admin, booking, video, accountId, pending, notify);
 }
 
 // Finalise one booking (idempotent with the webhook). Reads the live provider
@@ -99,6 +111,7 @@ export async function finaliseBooking(
   video: VideoAdapter,
   accountId: string,
   ref: BookingRef,
+  notify?: BookingNotify,
 ): Promise<BookingFinalisation> {
   const result = await booking.getBookingStatus(ref.provider_ref ?? '');
   if (result.status !== 'booked') {
@@ -115,6 +128,18 @@ export async function finaliseBooking(
   const journey = await getJourney(admin, accountId);
   if (journey && BOOKABLE_FROM.includes(journey.state)) {
     await advanceJourney(admin, accountId, 'consult_booked', 'full');
+    // Notify exactly once: this branch runs only on the transition into
+    // consult_booked, so a re-poll / the webhook re-fire does not re-send. Email
+    // is a side effect and never gates — the notify helper swallows any failure.
+    if (notify) {
+      await sendConsultBookedEmail(
+        admin,
+        notify.email,
+        accountId,
+        notify.baseUrl,
+        result.slotAt ?? null,
+      );
+    }
   }
 
   return { status: 'booked', booked: true };

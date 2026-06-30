@@ -20,13 +20,16 @@
   // BookingAdapter (P6); flip to "calcom" once CALCOM_API_KEY, CALCOM_EVENT_TYPE_ID,
   // CALCOM_BOOKING_URL and CALCOM_WEBHOOK_SECRET are set as secrets. VIDEO_IMPL
   // selects the VideoAdapter (P6); flip to "daily" once DAILY_API_KEY + DAILY_DOMAIN
-  // are set as secrets.
+  // are set as secrets. EMAIL_IMPL selects the EmailAdapter (D5); flip to "resend"
+  // once RESEND_API_KEY is set as a secret (EMAIL_FROM defaults to a verified
+  // mail.fern.care sender). Leave "mock" to log emails server-side with no keys.
   "vars": {
     "CORE_IMPL": "mock",
     "DISPENSING_IMPL": "mock",
     "IDENTITY_IMPL": "mock",
     "PAYMENTS_IMPL": "mock",
     "BOOKING_IMPL": "mock",
-    "VIDEO_IMPL": "mock"
+    "VIDEO_IMPL": "mock",
+    "EMAIL_IMPL": "mock"
   }
 }

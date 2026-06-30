@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
-import { getClinicalCore, getDispensing } from '../../../lib/adapters/factory';
+import { getClinicalCore, getDispensing, getEmail } from '../../../lib/adapters/factory';
 import { ensureAccount } from '../../../lib/accounts';
 import { decideClinicianAction, type ClinicianAction } from '../../../lib/clinician/decide';
 import { dispenseIssuedScript } from '../../../lib/dispensing/dispense';
@@ -54,11 +54,17 @@ export const POST: APIRoute = async (ctx) => {
     // separate functions; the route composes them.
     if (result.action === 'approve' && result.rxId) {
       const dispensing = getDispensing(env, admin);
-      await dispenseIssuedScript(admin, core, dispensing, {
-        accountId: result.patientAccountId,
-        corePatientId: result.corePatientId,
-        rxId: result.rxId,
-      });
+      await dispenseIssuedScript(
+        admin,
+        core,
+        dispensing,
+        {
+          accountId: result.patientAccountId,
+          corePatientId: result.corePatientId,
+          rxId: result.rxId,
+        },
+        { email: getEmail(env, admin), baseUrl: new URL(ctx.request.url).origin },
+      );
     }
   } catch (err) {
     return ctx.redirect(
