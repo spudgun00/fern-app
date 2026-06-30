@@ -2,7 +2,9 @@
 // P3 clinician console — the fast-lane review queue. Role-gated: clinician only.
 // The queue is driven by app-DB pointers (queue_item); the clinical content for
 // each item (the routing reasons / flags) is read from the core for display and
-// never copied app-side. Unstyled plumbing; the design system arrives later.
+// never copied app-side. Styled onto the D1 shell (D3); the data fetching and
+// role gate are unchanged, only the presentation is new.
+import Layout from '../../layouts/Layout.astro';
 import { createAdminClient } from '../../lib/supabase/admin';
 import { getClinicalCore } from '../../lib/adapters/factory';
 import { ensureAccount, listPendingFastQueue } from '../../lib/accounts';
@@ -28,55 +30,82 @@ const rows = await Promise.all(
 );
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Review queue &mdash; Fern clinician console</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Clinician console &mdash; review queue</h1>
-    <p>
-      Signed in as {user.email} (clinician). <a href="/clinician/consults">Consult queue (full lane)</a>{' '}
-      &middot; <a href="/logout">Log out</a>
-    </p>
-    <p>Fast-lane intakes awaiting an async review decision, oldest first.</p>
+<Layout title="Review queue — Fern clinician console" navVariant="clinician" user={user} active="/clinician">
+  <div class="wrap">
+    <div class="head stack">
+      <span class="eyebrow">Fast lane</span>
+      <h1>Review queue</h1>
+      <p class="lede">
+        Fast-lane intakes awaiting an async review decision, oldest first. A
+        clinician makes every decision; nothing is prescribed automatically.
+      </p>
+    </div>
 
     {
       rows.length === 0 ? (
-        <p>The queue is empty. No fast-lane intakes are awaiting review.</p>
+        <div class="card empty">
+          <span class="pill pill-soft">Queue empty</span>
+          <p class="muted">No fast-lane intakes are awaiting review.</p>
+        </div>
       ) : (
-        <table border="1" cellpadding="6" cellspacing="0">
-          <thead>
-            <tr>
-              <th>Submitted</th>
-              <th>Condition</th>
-              <th>Patient (core ref)</th>
-              <th>Flags / reasons</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ item, routing, condition }) => (
-              <tr>
-                <td>{new Date(item.created_at).toLocaleString('en-GB')}</td>
-                <td>{condition}</td>
-                <td><code>{item.account_id.slice(0, 8)}</code></td>
-                <td>
-                  <ul>
-                    {(routing?.reasons ?? []).map((r) => (
-                      <li>{r}</li>
-                    ))}
-                  </ul>
-                </td>
-                <td>
-                  <a href={`/clinician/intake/${item.id}`}>Review</a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul class="queue">
+          {rows.map(({ item, routing, condition }) => (
+            <li>
+              <a href={`/clinician/intake/${item.id}`} class="qrow card">
+                <div class="qmain">
+                  <div class="qtop">
+                    <span class="qcond">{condition}</span>
+                    <span class="pill pill-soft qref">{item.account_id.slice(0, 8)}</span>
+                  </div>
+                  <div class="qmeta">
+                    Submitted {new Date(item.created_at).toLocaleString('en-GB')}
+                  </div>
+                  {(routing?.reasons ?? []).length > 0 && (
+                    <div class="qflags">
+                      {(routing?.reasons ?? []).map((r) => (
+                        <span class="pill pill-soft">{r}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span class="qgo" aria-hidden="true">Review &rarr;</span>
+              </a>
+            </li>
+          ))}
+        </ul>
       )
     }
-  </body>
-</html>
+  </div>
+</Layout>
+
+<style>
+  .head { max-width: 64ch; }
+  .empty { margin-top: 28px; }
+  .empty .muted { margin-top: 10px; }
+
+  .queue { list-style: none; margin: 28px 0 0; padding: 0; }
+  .queue li + li { margin-top: 14px; }
+  .qrow {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 20px 24px; text-decoration: none;
+    transition: border-color var(--dur-quick, 0.2s) ease, box-shadow var(--dur-quick, 0.2s) ease, transform var(--dur-quick, 0.2s) ease;
+  }
+  .qrow:hover { border-color: var(--border-d); transform: translateY(-1px); }
+  .qmain { min-width: 0; }
+  .qtop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .qcond {
+    font-family: var(--disp); font-size: 19px; font-weight: 600; color: var(--navy);
+    text-transform: capitalize;
+  }
+  .qref { font-size: 10.5px; }
+  .qmeta { font-size: 13.5px; color: var(--soft); margin-top: 6px; }
+  .qflags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .qgo {
+    flex: none; font-family: var(--body); font-weight: 600; font-size: 15px;
+    color: var(--navy); white-space: nowrap;
+  }
+
+  @media (max-width: 560px) {
+    .qrow { flex-direction: column; align-items: flex-start; gap: 14px; }
+  }
+</style>

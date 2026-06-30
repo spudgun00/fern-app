@@ -2,7 +2,9 @@
 // Return page from the identity provider (and the mock flow). Polls the current
 // provider status and finalises: when verified, advances id_pending ->
 // id_verified. For Stripe the webhook is the authoritative path; this poll is a
-// belt-and-braces refresh and is idempotent with it.
+// belt-and-braces refresh and is idempotent with it. Styled onto the D1 shell
+// (D3); the poll + finalise logic is unchanged.
+import Layout from '../../../layouts/Layout.astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
 import { getIdentity } from '../../../lib/adapters/factory';
 import { ensureAccount, getJourney, getLatestIdVerification } from '../../../lib/accounts';
@@ -32,26 +34,47 @@ const journey = await getJourney(admin, account.id);
 const verified = journey?.state === 'id_verified';
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>ID check &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>ID check</h1>
-    {problem && <p style="color: red">{problem}</p>}
-    <p>Provider status: <code>{status ?? '(none)'}</code></p>
-    <p>Journey state: <code>{journey?.state ?? '(none)'}</code></p>
-    {
-      verified ? (
-        <p>Your identity is verified. <a href="/intake">Continue to intake</a>.</p>
-      ) : (
-        <p>
-          Not verified yet. Verification can take a moment; reload this page, or{' '}
-          <a href="/account/verify">start a new check</a>.
-        </p>
-      )
-    }
-  </body>
-</html>
+<Layout title="ID check — Fern" navVariant="onboarding" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="steps">Step 2 of 2 &middot; Identity</span>
+      <h1>ID check</h1>
+    </div>
+
+    <div class="card result-card stack">
+      {problem && <p class="notice notice-error">{problem}</p>}
+
+      {
+        verified ? (
+          <>
+            <span class="pill">Verified</span>
+            <p class="muted">
+              Your identity is verified. You can continue to the next step.
+            </p>
+            <a href="/intake" class="btn btn-pri btn-block">Continue to intake</a>
+          </>
+        ) : (
+          <>
+            <span class="pill pill-soft">In progress</span>
+            <p class="muted">
+              Not verified yet. Verification can take a moment. Reload this page,
+              or start a new check.
+            </p>
+            <a href="/account/verify" class="btn btn-ghost btn-block">Start a new check</a>
+          </>
+        )
+      }
+
+      <p class="soft provider">
+        Provider status: <code>{status ?? '(none)'}</code> &middot; journey state:{' '}
+        <code>{journey?.state ?? '(none)'}</code>
+      </p>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .result-card { margin-top: 28px; }
+  .provider { margin-top: 4px; font-size: 13px; }
+  code { font-family: var(--mono); font-size: 12.5px; }
+</style>

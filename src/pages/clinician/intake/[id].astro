@@ -3,7 +3,9 @@
 // Reads the pre-filled clinical screen from the core (reading clinical content
 // server-side for display is allowed; it is never copied app-side). The action
 // bar posts to /api/clinician/decide: Approve + issue script | Escalate to
-// consult | Refuse + signpost. Every action requires a recorded reason.
+// consult | Refuse + signpost. Every action requires a recorded reason. Styled
+// onto the D1 shell (D3); the decision logic + form actions are unchanged.
+import Layout from '../../../layouts/Layout.astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
 import { getClinicalCore } from '../../../lib/adapters/factory';
 import { ensureAccount, getQueueItemById, getJourney } from '../../../lib/accounts';
@@ -35,134 +37,170 @@ const symptomLabel = (symptomId: string) =>
 const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Intake review &mdash; Fern clinician console</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <p><a href="/clinician">&larr; Back to the queue</a></p>
-    <h1>Intake review</h1>
-    <p>Signed in as {user.email} (clinician). <a href="/logout">Log out</a></p>
-    {error && <p style="color: #b00">{error}</p>}
+<Layout title="Intake review — Fern clinician console" navVariant="clinician" user={user} active="/clinician">
+  <div class="wrap detail">
+    <p class="back"><a href="/clinician" class="link">&larr; Back to the queue</a></p>
 
-    <p>
-      Patient (core ref): <code>{item.account_id.slice(0, 8)}</code> &middot; lane:{' '}
-      <code>{item.lane}</code> &middot; queue status: <code>{item.status}</code> &middot; journey
-      state: <code>{journey?.state}</code>
-    </p>
+    <div class="head stack">
+      <span class="eyebrow">Fast lane &middot; intake review</span>
+      <h1>Intake review</h1>
+    </div>
+
+    {error && <p class="notice notice-error top-notice">{error}</p>}
+
+    <div class="card meta-card top-notice">
+      <dl class="meta">
+        <div><dt>Patient (core ref)</dt><dd><code>{item.account_id.slice(0, 8)}</code></dd></div>
+        <div><dt>Lane</dt><dd><span class="pill pill-soft">{item.lane}</span></dd></div>
+        <div><dt>Queue status</dt><dd><span class="pill pill-soft">{item.status}</span></dd></div>
+        <div><dt>Journey state</dt><dd><span class="pill pill-soft">{journey?.state}</span></dd></div>
+      </dl>
+    </div>
 
     {
       decided && (
-        <p style="color: #060">
-          This intake has already been decided (<code>{item.status}</code>). Decided at{' '}
+        <p class="notice notice-info top-notice">
+          This intake has already been decided (<strong>{item.status}</strong>). Decided at{' '}
           {item.decided_at ? new Date(item.decided_at).toLocaleString('en-GB') : 'unknown'}.
         </p>
       )
     }
 
-    <h2>Routing</h2>
-    <p>
-      Deterministic outcome: <code>{routing?.outcome}</code> &middot; lane:{' '}
-      <code>{routing?.lane ?? '(none)'}</code>
-    </p>
-    <ul>
-      {(routing?.reasons ?? []).map((r) => <li>{r}</li>)}
-    </ul>
+    <div class="card section">
+      <h2>Routing</h2>
+      <p class="muted">
+        Deterministic outcome: <span class="pill pill-soft">{routing?.outcome}</span>{' '}
+        lane: <span class="pill pill-soft">{routing?.lane ?? 'none'}</span>
+      </p>
+      {(routing?.reasons ?? []).length > 0 && (
+        <ul class="reasons">
+          {(routing?.reasons ?? []).map((r) => <li>{r}</li>)}
+        </ul>
+      )}
+    </div>
 
-    <h2>Reported clinical picture</h2>
-    {
-      answers ? (
-        <dl>
-          <dt>Treatment history</dt>
-          <dd>{answers.treatmentHistory === 'continuing' ? 'Continuing / restarting' : 'First-time initiation'}</dd>
-
-          <dt>Symptoms</dt>
-          <dd>
-            {answers.symptoms.length === 0
-              ? '(none reported)'
-              : answers.symptoms.map(symptomLabel).join(', ')}
-          </dd>
-
-          <dt>Months since last period</dt>
-          <dd>{answers.monthsSinceLastPeriod ?? '(not given)'}</dd>
-
-          <dt>Blood pressure (self-reported)</dt>
-          <dd>
-            {answers.bpSystolic ?? '?'}/{answers.bpDiastolic ?? '?'} mmHg
-          </dd>
-
-          {SCREEN_QUESTIONS.map((q) => (
-            <>
-              <dt>{q.label}</dt>
-              <dd>{yesNo(answers[q.name] as boolean | undefined)}</dd>
-            </>
-          ))}
-        </dl>
-      ) : (
-        <p style="color: #b00">Could not read the intake from the core.</p>
-      )
-    }
+    <div class="card section">
+      <h2>Reported clinical picture</h2>
+      {
+        answers ? (
+          <dl class="picture">
+            <div>
+              <dt>Treatment history</dt>
+              <dd>{answers.treatmentHistory === 'continuing' ? 'Continuing / restarting' : 'First-time initiation'}</dd>
+            </div>
+            <div>
+              <dt>Symptoms</dt>
+              <dd>
+                {answers.symptoms.length === 0
+                  ? '(none reported)'
+                  : answers.symptoms.map(symptomLabel).join(', ')}
+              </dd>
+            </div>
+            <div>
+              <dt>Months since last period</dt>
+              <dd>{answers.monthsSinceLastPeriod ?? '(not given)'}</dd>
+            </div>
+            <div>
+              <dt>Blood pressure (self-reported)</dt>
+              <dd>{answers.bpSystolic ?? '?'}/{answers.bpDiastolic ?? '?'} mmHg</dd>
+            </div>
+            {SCREEN_QUESTIONS.map((q) => (
+              <div>
+                <dt>{q.label}</dt>
+                <dd>{yesNo(answers[q.name] as boolean | undefined)}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p class="notice notice-error">Could not read the intake from the core.</p>
+        )
+      }
+    </div>
 
     {
       !decided && (
-        <>
+        <div class="card section decision">
           <h2>Decision</h2>
-          <p>
-            A clinician makes this decision. Approving issues the script; nothing is prescribed
-            without this action. Every decision records your reason.
+          <p class="muted decision-copy">
+            A clinician makes this decision. Approving issues the script; nothing
+            is prescribed without this action. Every decision records your reason.
           </p>
-          <form method="POST" action="/api/clinician/decide">
+          <form method="POST" action="/api/clinician/decide" class="stack">
             <input type="hidden" name="queueItemId" value={item.id} />
 
-            <p>
-              <label>
-                Clinical reason / rationale (recorded with every decision)
-                <br />
-                <textarea name="reason" rows="3" cols="60" required />
-              </label>
-            </p>
+            <label class="field">
+              <span class="label">Clinical reason / rationale (recorded with every decision)</span>
+              <textarea name="reason" rows="3" required></textarea>
+            </label>
 
-            <fieldset>
+            <fieldset class="rx">
               <legend>Script to issue (used only when you approve)</legend>
-              <p>
-                <label>
-                  Medicine
-                  <br />
-                  <input type="text" name="rxName" value="Transdermal HRT (as assessed)" size="40" />
-                </label>
-              </p>
-              <p>
-                <label>
-                  Directions / dose
-                  <br />
-                  <input type="text" name="rxDose" value="Use as directed" size="40" />
-                </label>
-              </p>
-              <p>
-                <label>
-                  Quantity
-                  <br />
-                  <input type="number" name="rxQuantity" value="1" min="1" />
-                </label>
-              </p>
+              <label class="field">
+                <span class="label">Medicine</span>
+                <input type="text" name="rxName" value="Transdermal HRT (as assessed)" />
+              </label>
+              <label class="field">
+                <span class="label">Directions / dose</span>
+                <input type="text" name="rxDose" value="Use as directed" />
+              </label>
+              <label class="field qty">
+                <span class="label">Quantity</span>
+                <input type="number" name="rxQuantity" value="1" min="1" />
+              </label>
             </fieldset>
 
-            <p>
-              <button type="submit" name="action" value="approve">
+            <div class="actions">
+              <button type="submit" name="action" value="approve" class="btn btn-pri">
                 Approve + issue script
-              </button>{' '}
-              <button type="submit" name="action" value="escalate">
+              </button>
+              <button type="submit" name="action" value="escalate" class="btn btn-ghost">
                 Escalate to consult
-              </button>{' '}
-              <button type="submit" name="action" value="refuse">
+              </button>
+              <button type="submit" name="action" value="refuse" class="btn btn-ghost btn-refuse">
                 Refuse + signpost
               </button>
-            </p>
+            </div>
           </form>
-        </>
+        </div>
       )
     }
-  </body>
-</html>
+  </div>
+</Layout>
+
+<style>
+  .detail { max-width: 760px; }
+  .back { margin-bottom: 18px; }
+  .top-notice { margin-top: 22px; }
+  .section { margin-top: 22px; }
+  .section h2 { font-size: 22px; }
+
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 18px 22px; margin: 0; }
+  .meta dt { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+  .meta dd { margin: 6px 0 0; }
+
+  .reasons { margin: 14px 0 0; padding-left: 20px; }
+  .reasons li { color: var(--text); font-size: 15px; }
+  .reasons li + li { margin-top: 4px; }
+
+  .picture { margin: 4px 0 0; }
+  .picture > div { display: grid; grid-template-columns: 230px 1fr; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border); }
+  .picture > div:first-child { border-top: none; }
+  .picture dt { font-weight: 600; color: var(--navy); font-size: 14.5px; }
+  .picture dd { margin: 0; color: var(--text); }
+
+  .decision-copy { margin: 8px 0 6px; }
+  .rx { margin-top: 4px; }
+  .rx .field:last-child { margin-bottom: 0; }
+  .qty input { max-width: 120px; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+  .btn-refuse { color: var(--fern-warn); border-color: rgba(181, 86, 78, 0.45); }
+  .btn-refuse:hover { border-color: var(--fern-warn); }
+
+  code { font-family: var(--mono); font-size: 12.5px; }
+
+  @media (max-width: 560px) {
+    .picture > div { grid-template-columns: 1fr; gap: 4px; }
+    .actions .btn { width: 100%; }
+  }
+</style>

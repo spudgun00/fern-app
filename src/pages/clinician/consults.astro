@@ -2,7 +2,9 @@
 // P6 clinician console — the consult queue (the full / assessed lane). Role-gated:
 // clinician only. Lists booked consults awaiting a decision, soonest slot first.
 // Driven by app-DB pointers (booking_ref); the clinical content for each is read
-// from the core on the detail page, never copied app-side. Unstyled plumbing.
+// from the core on the detail page, never copied app-side. Styled onto the D1
+// shell (D3); the data fetching and role gate are unchanged.
+import Layout from '../../layouts/Layout.astro';
 import { createAdminClient } from '../../lib/supabase/admin';
 import { ensureAccount, listPendingConsults } from '../../lib/accounts';
 
@@ -16,47 +18,75 @@ if (account.role !== 'clinician') return Astro.redirect('/');
 const consults = await listPendingConsults(admin);
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Consult queue &mdash; Fern clinician console</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Clinician console &mdash; consult queue</h1>
-    <p>
-      Signed in as {user.email} (clinician). <a href="/clinician">Review queue (fast lane)</a>{' '}
-      &middot; <a href="/logout">Log out</a>
-    </p>
-    <p>Booked assessed-lane consultations awaiting a decision, soonest slot first.</p>
+<Layout title="Consult queue — Fern clinician console" navVariant="clinician" user={user} active="/clinician/consults">
+  <div class="wrap">
+    <div class="head stack">
+      <span class="eyebrow">Assessed lane</span>
+      <h1>Consult queue</h1>
+      <p class="lede">
+        Booked assessed-lane consultations awaiting a decision, soonest slot
+        first. A clinician makes the prescribing decision at the consult.
+      </p>
+    </div>
 
     {
       consults.length === 0 ? (
-        <p>No consultations are booked and awaiting a decision.</p>
+        <div class="card empty">
+          <span class="pill pill-soft">Queue empty</span>
+          <p class="muted">No consultations are booked and awaiting a decision.</p>
+        </div>
       ) : (
-        <table border="1" cellpadding="6" cellspacing="0">
-          <thead>
-            <tr>
-              <th>Slot</th>
-              <th>Patient (account ref)</th>
-              <th>Booked</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {consults.map((c) => (
-              <tr>
-                <td>{c.slot_at ? new Date(c.slot_at).toLocaleString('en-GB') : '(unscheduled)'}</td>
-                <td><code>{c.account_id.slice(0, 8)}</code></td>
-                <td>{new Date(c.created_at).toLocaleString('en-GB')}</td>
-                <td>
-                  <a href={`/clinician/consult/${c.id}`}>Open consult</a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul class="queue">
+          {consults.map((c) => (
+            <li>
+              <a href={`/clinician/consult/${c.id}`} class="qrow card">
+                <div class="qmain">
+                  <div class="qtop">
+                    <span class="qslot">
+                      {c.slot_at ? new Date(c.slot_at).toLocaleString('en-GB') : 'Unscheduled'}
+                    </span>
+                    <span class="pill pill-soft qref">{c.account_id.slice(0, 8)}</span>
+                  </div>
+                  <div class="qmeta">
+                    Booked {new Date(c.created_at).toLocaleString('en-GB')}
+                  </div>
+                </div>
+                <span class="qgo" aria-hidden="true">Open consult &rarr;</span>
+              </a>
+            </li>
+          ))}
+        </ul>
       )
     }
-  </body>
-</html>
+  </div>
+</Layout>
+
+<style>
+  .head { max-width: 64ch; }
+  .empty { margin-top: 28px; }
+  .empty .muted { margin-top: 10px; }
+
+  .queue { list-style: none; margin: 28px 0 0; padding: 0; }
+  .queue li + li { margin-top: 14px; }
+  .qrow {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 20px 24px; text-decoration: none;
+    transition: border-color var(--dur-quick, 0.2s) ease, box-shadow var(--dur-quick, 0.2s) ease, transform var(--dur-quick, 0.2s) ease;
+  }
+  .qrow:hover { border-color: var(--border-d); transform: translateY(-1px); }
+  .qmain { min-width: 0; }
+  .qtop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .qslot {
+    font-family: var(--disp); font-size: 19px; font-weight: 600; color: var(--navy);
+  }
+  .qref { font-size: 10.5px; }
+  .qmeta { font-size: 13.5px; color: var(--soft); margin-top: 6px; }
+  .qgo {
+    flex: none; font-family: var(--body); font-weight: 600; font-size: 15px;
+    color: var(--navy); white-space: nowrap;
+  }
+
+  @media (max-width: 560px) {
+    .qrow { flex-direction: column; align-items: flex-start; gap: 14px; }
+  }
+</style>

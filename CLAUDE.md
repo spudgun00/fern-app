@@ -35,15 +35,18 @@ P1's Test C (real Stripe Identity test-mode path), P5's real Stripe Checkout/Bil
 path, and P6's real Cal.com + Daily paths are all wired-but-unclosed (need the test
 secrets set, see below). P7 not started.
 
-**Demo track status: D2 built and proven** (D1 design foundation + app shell;
-D2 patient surfaces styled). The corrected Fern design system is
+**Demo track status: D3 built and proven** (D1 design foundation + app shell;
+D2 patient surfaces styled; D3 clinician surfaces styled + onboarding tail folded
+into the Fern shell). The corrected Fern design system is
 vendored into `src/styles/tokens/` (a faithful copy of the marketing tokens with
 the cream ground corrected from the stale `#F4EFE5` to `#F8F7F0`; a test locks
 this). Shared shell in `src/layouts/Layout.astro` + `src/components/`
 (`Nav` variants public/onboarding/patient/clinician, `Footer`, `Wordmark`,
 `Coming`). The demo banner is injected sitewide by the middleware
 (`src/lib/demo-banner.ts`) so it shows on EVERY route, including surfaces not yet
-on the Layout (clinician console, dev harness) until D2/D3 bring them across.
+on the Layout (the dev harness, the mock provider stand-ins not in a build list)
+until a later phase brings them across; the patient (D2) and clinician (D3)
+surfaces now render the banner above their own Fern shell.
 Proved on the deployed URL: the entry/auth/account/about surfaces render as Fern
 (corrected cream, navy Fraunces, Inter, the marketing card/band/button rules); the
 banner shows on every route; the Dashboard/Treatment/Messages/Documents stubs
@@ -69,7 +72,34 @@ book a slot (mock) -> `consult_booked` + minted room -> join the styled room ->
 a clinician issues at the consult -> patient `/treatment` shows the script "Sent
 to the pharmacy"; every screen is Fern, the journey advanced exactly as before.
 `npm test`: **80 passed** (D2 is presentation-only; its proof is the live-URL
-walk, not new tests). D3–D7 not started.
+walk, not new tests).
+
+**D3 (clinician surfaces styled + onboarding tail)** restyles the clinician console
+onto the D1 shell and folds the last raw onboarding pages into Fern — presentation
+only, the decision logic untouched (each page's frontmatter unchanged bar adding
+the `Layout` import): `clinician/index` (the fast-lane review queue, now styled
+queue cards with condition + ref + routing-reason pills), `clinician/consults` (the
+assessed-lane consult queue, styled cards + a "queue empty" state), `clinician/intake/[id]`
+(intake detail as a meta card + routing pills + a styled clinical-picture
+definition list + the **Approve + issue | Escalate | Refuse** action bar),
+`clinician/consult/[id]` (consult detail + a periwinkle "room ready" video-room
+card with the join button + the **Issue | Refuse** action bar), and the onboarding
+tail `account/verify/mock` (the ID-check "Demo stand-in", mirroring the
+billing/mock pattern) + `account/verify/complete` (the verified / in-progress
+result card). Refuse wears a warn-tinted ghost button; the clinician nav variant
+carries the "Clinician console" tag. Proved on the deployed URL: a clinician views
+the styled review queue, opens an intake, and **Approves** -> the patient advances
+`rx_issued -> dispensing` ("Sent to the pharmacy" on `/treatment`) and the item
+drops out of the queue; an **Escalate** moves the same intake into the full lane,
+the patient pays (mock checkout) + books (mock slot) -> `consult_booked` + a minted
+room, and the patient `/consult` and the clinician `clinician/consult/[id]` resolve
+the SAME room URL; the clinician **Issue** advances `consult_done -> rx_issued ->
+dispensing` and the decided consult drops out of the consult queue; the onboarding
+tail (`verify/mock`, `verify/complete`) renders in full Fern. Every clinician +
+onboarding screen is now Fern; with D2 the entire walkable surface (patient +
+clinician + onboarding tail) is styled, decision logic untouched. `npm test`:
+**80 passed** (D3 is presentation-only; its proof is the live-URL walk). D4–D7 not
+started.
 
 ## Stack
 
@@ -453,14 +483,50 @@ These survive into later phases. None blocks the spine; (a) is the one that matt
   every screen is Fern and the journey advanced exactly as before. `npm test`:
   **80 passed** (D2 is presentation-only; its proof is the live-URL walk).
 
-### Open gap before D3 (do NOT lose this)
+### Open gap before D3 (closed in D3)
 
-- **The onboarding tail is still raw harness.** `account/verify/mock` and
-  `account/verify/complete` (and the verify start page's deeper states) are still
-  unstyled harness pages — they sit just before the D2 path during onboarding, so
-  a reviewer hits them. They were not in D1's proof set or D2's build list. Fold
-  them into the Fern shell in D3 (alongside the clinician surfaces) so the whole
-  walk, onboarding tail included, is styled.
+- **The onboarding tail was still raw harness.** `account/verify/mock` and
+  `account/verify/complete` were unstyled harness pages sitting just before the
+  D2 path during onboarding. **Closed in D3:** both are now on the Fern shell
+  (`verify/mock` as a "Demo stand-in", `verify/complete` as a result card). The
+  whole walk, onboarding tail included, is now styled.
+
+## D3 done (clinician surfaces styled + onboarding tail — the whole walk turns Fern)
+
+- **Added:** the clinician console + the last raw onboarding pages restyled onto
+  the D1 shell + primitives. With D2 the *entire* walkable surface (patient +
+  clinician + onboarding tail) now reads as Fern.
+- **Presentation only (the hard line for this phase):** `decideClinicianAction`
+  and `decideConsultAction`, the journey machine, the role gates, and every
+  data-fetch are unchanged — each page's frontmatter is untouched bar adding the
+  `Layout` import. The clinician-gated `rx_issued` + the recorded reason/audit are
+  presentation-wrapped, not altered.
+- **Surfaces:** `clinician/index` (fast-lane review queue → styled cards: condition,
+  account ref pill, routing-reason pills, oldest-first), `clinician/consults`
+  (assessed-lane consult queue → styled cards + a "queue empty" state),
+  `clinician/intake/[id]` (intake detail = meta card + routing pills + a
+  clinical-picture definition list + the **Approve + issue script | Escalate to
+  consult | Refuse + signpost** action bar), `clinician/consult/[id]` (consult
+  detail + a periwinkle "room ready" video-room card with the join button + the
+  **Issue script | Refuse + signpost** action bar), and the onboarding tail
+  `account/verify/mock` (the ID-check "Demo stand-in") + `account/verify/complete`
+  (verified / in-progress result card).
+- **Brand calls (held to the colors.css system):** periwinkle is the confirmation
+  surface (the "room ready" pill, the decided-state `notice-info`); booking/queue
+  status reads as styled **pills**; Refuse is a **warn-tinted ghost** button (not a
+  filled red); the clinician nav variant carries the mono "Clinician console" tag;
+  the mock stand-ins keep the "Demo stand-in" pill. No new palette, no warm leftovers.
+- **Proven on the live URL (both lanes):** **fast lane** — a clinician views the
+  styled review queue, opens an intake, **Approves** → patient advances
+  `rx_issued -> dispensing` ("Sent to the pharmacy" on `/treatment`) and the item
+  drops out of the queue. **Full lane (via escalate)** — the same intake is
+  **Escalated** → full lane; the patient pays (mock checkout) + books (mock slot)
+  → `consult_booked` + a minted room; the patient `/consult` and the clinician
+  `clinician/consult/[id]` resolve the **same** room URL; the clinician **Issue**
+  advances `consult_done -> rx_issued -> dispensing` and the decided consult drops
+  out of the consult queue. The onboarding tail renders in full Fern. `npm test`:
+  **80 passed** (D3 is presentation-only; its proof is the live-URL walk). D4–D7
+  not started.
 
 ## Verifying
 

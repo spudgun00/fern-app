@@ -3,6 +3,8 @@
 // IDENTITY_IMPL=mock. It plays the role of Stripe's hosted page: the user
 // "completes" the check here. No documents are uploaded or stored; this is a
 // dev affordance. The real Stripe test-mode flow replaces this page entirely.
+// Styled onto the D1 shell (D3), clearly fenced as a demo stand-in.
+import Layout from '../../../layouts/Layout.astro';
 const { user } = Astro.locals;
 if (!user) return Astro.redirect('/login');
 
@@ -10,19 +12,41 @@ const session = Astro.url.searchParams.get('session') ?? '';
 const ret = Astro.url.searchParams.get('return') ?? '/account/verify/complete';
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Mock ID check &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Mock ID check (dev only)</h1>
-    <p>Stand-in for the provider hosted flow. No documents are uploaded or stored.</p>
-    <form method="POST" action="/api/account/verify/mock-confirm">
+<Layout title="ID check — Fern" navVariant="onboarding" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="pill pill-soft">Demo stand-in</span>
+      <h1>ID check</h1>
+      <p class="lede">
+        This stands in for the provider's hosted document and selfie check. No
+        documents are uploaded or stored. The live check uses the provider's
+        secure flow.
+      </p>
+    </div>
+
+    <form method="POST" action="/api/account/verify/mock-confirm" class="card check-card">
       <input type="hidden" name="session" value={session} />
       <input type="hidden" name="return" value={ret} />
-      <button type="submit">Complete verification (test)</button>
+      <div class="line">
+        <span class="line-label">Identity check</span>
+        <span class="line-state">Document + selfie</span>
+      </div>
+      <button type="submit" class="btn btn-pri btn-block confirm">Complete verification</button>
     </form>
-  </body>
-</html>
+
+    <p class="soft alt"><a href="/account/verify" class="link">Cancel and go back</a></p>
+  </div>
+</Layout>
+
+<style>
+  .check-card { margin-top: 26px; }
+  .line {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; padding-bottom: 18px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .line-label { color: var(--muted); font-size: 14.5px; }
+  .line-state { font-family: var(--disp); font-size: 18px; font-weight: 600; color: var(--navy); }
+  .confirm { margin-top: 18px; }
+  .alt { margin-top: 18px; text-align: center; }
+</style>
