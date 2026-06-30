@@ -1,0 +1,50 @@
+---
+import '../styles/app.css';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+
+// The shared app shell. Every patient + clinician surface renders into this:
+// the sitewide demo banner, the variant-aware nav, the content slot, and the
+// footer. Built on the vendored (corrected) Fern design system.
+export interface Props {
+  title?: string;
+  description?: string;
+  navVariant?: 'public' | 'onboarding' | 'patient' | 'clinician';
+  user?: { email?: string | null } | null;
+  active?: string;
+  /** Narrow the main content column (auth / onboarding / focused forms). */
+  narrow?: boolean;
+}
+const {
+  title = 'Fern patient zone',
+  description = 'A demonstration of the Fern patient zone. Not yet operating.',
+  navVariant = 'public',
+  user = null,
+  active = '',
+  narrow = false,
+} = Astro.props;
+---
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <meta name="theme-color" content="#C6CEF4" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to content</a>
+  <Nav variant={navVariant} user={user} active={active} />
+  <main id="main" class={narrow ? 'page-narrow' : 'page'}>
+    <slot />
+  </main>
+  <Footer />
+</body>
+</html>

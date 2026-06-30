@@ -1,27 +1,36 @@
 ---
-// Minimal unstyled sign-up. P0 plumbing only.
+import Layout from '../layouts/Layout.astro';
 if (Astro.locals.user) return Astro.redirect('/dev/harness');
 const error = Astro.url.searchParams.get('error');
 ---
+<Layout title="Sign up — Fern" navVariant="public" user={null} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Create your account</span>
+      <h1>Sign up</h1>
+      <p class="lede">Start your Fern account to walk the patient journey.</p>
+    </div>
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Sign up &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Sign up</h1>
-    {error && <p style="color: red">{error}</p>}
-    <form method="POST" action="/api/auth/signup">
-      <p>
-        <label>Email <input type="email" name="email" required /></label>
-      </p>
-      <p>
-        <label>Password <input type="password" name="password" required minlength="6" /></label>
-      </p>
-      <button type="submit">Create account</button>
+    <form method="POST" action="/api/auth/signup" class="card auth-card">
+      {error && <p class="notice notice-error">{error}</p>}
+      <label class="field">
+        <span class="label">Email</span>
+        <input type="email" name="email" required autocomplete="email" />
+      </label>
+      <label class="field">
+        <span class="label">Password</span>
+        <input type="password" name="password" required minlength="6" autocomplete="new-password" />
+        <span class="hint">At least 6 characters.</span>
+      </label>
+      <button type="submit" class="btn btn-pri btn-block">Create account</button>
     </form>
-    <p>Already have an account? <a href="/login">Log in</a></p>
-  </body>
-</html>
+
+    <p class="soft alt">Already have an account? <a href="/login" class="link">Log in</a></p>
+  </div>
+</Layout>
+
+<style>
+  .auth-card { margin-top: 28px; }
+  .auth-card .field:last-of-type { margin-bottom: 22px; }
+  .alt { margin-top: 20px; text-align: center; }
+</style>

@@ -1,0 +1,200 @@
+---
+import Wordmark from './Wordmark.astro';
+
+// The app's primary nav. Variant decides which links + actions show:
+//  - public:     logged-out chrome (Log in / Sign up)
+//  - onboarding: linear profile -> verify -> intake flow (email + Log out)
+//  - patient:    the patient app (Dashboard, Treatment, Messages, Documents)
+//  - clinician:  the clinician console (Queue, Consults)
+// The patient nav is where the P7 "coming" stubs (messages/documents/dashboard)
+// surface, so the nav reads complete. Styled in D1; the surfaces it links to
+// are restyled in D2/D3.
+export interface Props {
+  variant?: 'public' | 'onboarding' | 'patient' | 'clinician';
+  user?: { email?: string | null } | null;
+  active?: string;
+}
+const { variant = 'public', user = null, active = '' } = Astro.props;
+
+const patientLinks = [
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/treatment', label: 'Treatment' },
+  { href: '/messages', label: 'Messages' },
+  { href: '/documents', label: 'Documents' },
+];
+const clinicianLinks = [
+  { href: '/clinician', label: 'Queue' },
+  { href: '/clinician/consults', label: 'Consults' },
+];
+
+const links =
+  variant === 'patient' ? patientLinks : variant === 'clinician' ? clinicianLinks : [];
+const home = variant === 'clinician' ? '/clinician' : '/';
+const isCurrent = (href: string) => active === href;
+---
+<header class:list={['appnav', { 'has-sheet': links.length > 0 }]}>
+  <nav class="nav" aria-label="Primary">
+    <a href={home} class="logo" aria-label="Fern home">
+      <Wordmark dot="navy" />
+      {variant === 'clinician' && <span class="console-tag">Clinician console</span>}
+    </a>
+
+    {links.length > 0 && (
+      <div class="links">
+        {links.map((l) => (
+          <a href={l.href} aria-current={isCurrent(l.href) ? 'page' : undefined}>{l.label}</a>
+        ))}
+      </div>
+    )}
+
+    <div class="actions">
+      {variant === 'public' && (
+        <>
+          <a href="/login" class="link login-link">Log in</a>
+          <a href="/signup" class="btn btn-pri nav-cta">Sign up</a>
+        </>
+      )}
+      {variant === 'onboarding' && (
+        <>
+          {user?.email && <span class="who" title={user.email}>{user.email}</span>}
+          <a href="/logout" class="link">Log out</a>
+        </>
+      )}
+      {(variant === 'patient' || variant === 'clinician') && (
+        <a href="/logout" class="link logout-link">Log out</a>
+      )}
+    </div>
+
+    {links.length > 0 && (
+      <button
+        type="button"
+        class="menu-toggle"
+        id="nav-toggle"
+        aria-expanded="false"
+        aria-controls="nav-sheet"
+        aria-label="Open menu"
+      >
+        <span class="bar" aria-hidden="true"></span>
+        <span class="bar" aria-hidden="true"></span>
+      </button>
+    )}
+  </nav>
+
+  {links.length > 0 && (
+    <div class="sheet" id="nav-sheet" hidden>
+      <nav class="sheet-links" aria-label="Mobile">
+        {links.map((l) => (
+          <a href={l.href} aria-current={isCurrent(l.href) ? 'page' : undefined}>{l.label}</a>
+        ))}
+        <a href="/logout" class="sheet-logout">Log out</a>
+      </nav>
+    </div>
+  )}
+</header>
+
+<style>
+  .appnav {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--cream) 90%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav {
+    max-width: var(--container-max, 1080px);
+    margin: 0 auto;
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .logo { text-decoration: none; display: inline-flex; align-items: center; gap: 10px; }
+  .console-tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--soft);
+    border-left: 1px solid var(--border);
+    padding-left: 10px;
+  }
+  .links { display: flex; gap: 22px; margin-left: 8px; }
+  .links a {
+    font-size: 14.5px;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .links a:hover { color: var(--navy); }
+  .links a[aria-current='page'] { color: var(--navy); font-weight: 600; }
+
+  .actions { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+  .login-link { border-bottom: none; }
+  .nav-cta { padding: 9px 18px; font-size: 14px; border-radius: 12px; }
+  .who {
+    font-size: 13px;
+    color: var(--soft);
+    max-width: 22ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* mobile disclosure */
+  .menu-toggle {
+    display: none;
+    margin-left: 12px;
+    width: 42px; height: 38px;
+    background: transparent;
+    border: 1px solid rgba(27, 28, 58, 0.25);
+    border-radius: 11px;
+    cursor: pointer;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+  .menu-toggle .bar { width: 18px; height: 2px; background: var(--navy); border-radius: 2px; }
+  .sheet { border-top: 1px solid var(--border); background: var(--cream); }
+  .sheet-links {
+    max-width: var(--container-max, 1080px);
+    margin: 0 auto;
+    padding: 8px 28px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sheet-links a {
+    font-size: 16px;
+    color: var(--navy);
+    text-decoration: none;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-logout { font-weight: 600; }
+
+  /* Variants with a mobile sheet (patient/clinician) collapse to a hamburger.
+     Public/onboarding have no sheet, so their short actions stay visible. */
+  @media (max-width: 680px) {
+    .has-sheet .links, .has-sheet .actions { display: none; }
+    .has-sheet .menu-toggle { display: inline-flex; margin-left: auto; }
+  }
+  /* Onboarding email would overflow a narrow header; keep just Log out. */
+  @media (max-width: 560px) {
+    .who { display: none; }
+  }
+</style>
+
+<script>
+  const toggle = document.getElementById('nav-toggle');
+  const sheet = document.getElementById('nav-sheet');
+  if (toggle && sheet) {
+    toggle.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', String(!open));
+      toggle.setAttribute('aria-label', open ? 'Open menu' : 'Close menu');
+      sheet.hidden = open;
+    });
+  }
+</script>

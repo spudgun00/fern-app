@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Coming from '../components/Coming.astro';
+const { user } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+---
+<Layout title="Documents — Fern" navVariant="patient" user={user} active="/documents">
+  <Coming
+    eyebrow="Records and letters"
+    title="Documents"
+    blurb="Your consultation letters, prescription records and downloads, kept in one place for you to access any time."
+  />
+</Layout>

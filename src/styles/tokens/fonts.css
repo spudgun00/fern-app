@@ -1,0 +1,11 @@
+/* ============================================================
+   FERN · WEBFONTS
+   FAITHFUL COPY from spudgun00/fern (tokens/fonts.css), 2026-06-30.
+   Fraunces (display serif), Inter (body/UI), JetBrains Mono (labels).
+   Fraunces is a variable optical-size serif; we ship the 9..144 axis.
+
+   NOTE (before real / pre-launch): these load via the Google Fonts
+   CDN — a runtime third-party dependency. Fine for a free demo;
+   self-host via Fontsource pre-launch for privacy + perf.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');

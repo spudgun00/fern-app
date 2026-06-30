@@ -2,7 +2,8 @@
 // P1 ID-verification start. Step 2 of 2. Starting the check moves the journey
 // registered -> id_pending and sends the user to the provider's hosted flow
 // (Stripe Identity test mode) or the in-app mock flow, depending on
-// IDENTITY_IMPL. Unstyled plumbing.
+// IDENTITY_IMPL. Styled onto the D1 shell; logic + form action unchanged.
+import Layout from '../../layouts/Layout.astro';
 import { createAdminClient } from '../../lib/supabase/admin';
 import { ensureAccount, getJourney } from '../../lib/accounts';
 
@@ -23,22 +24,35 @@ if (journey && journey.state !== 'registered' && journey.state !== 'id_pending')
 const error = Astro.url.searchParams.get('error');
 const pending = journey?.state === 'id_pending';
 ---
+<Layout title="Verify your identity — Fern" navVariant="onboarding" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="steps">Step 2 of 2 &middot; Identity</span>
+      <h1>Verify your identity</h1>
+      <p class="lede">ID verification is required before any clinical step.</p>
+    </div>
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Verify your identity &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Verify your identity</h1>
-    <p>Step 2 of 2. ID verification is required before any clinical step.</p>
-    {error && <p style="color: red">{error}</p>}
-    {pending && <p>A verification check is already in progress. You can start a new one below.</p>}
+    <div class="card auth-card stack">
+      {error && <p class="notice notice-error">{error}</p>}
+      {pending && (
+        <p class="notice notice-info">A verification check is already in progress. You can start a new one below.</p>
+      )}
 
-    <form method="POST" action="/api/account/verify/start">
-      <button type="submit">Start ID check</button>
-    </form>
-    <p>Provider: <code>{env.IDENTITY_IMPL}</code> (test mode).</p>
-  </body>
-</html>
+      <p class="muted">
+        We use a secure document and selfie check. It takes a couple of minutes.
+      </p>
+
+      <form method="POST" action="/api/account/verify/start">
+        <button type="submit" class="btn btn-pri btn-block">Start ID check</button>
+      </form>
+
+      <p class="soft provider">Provider: <code>{env.IDENTITY_IMPL}</code> (test mode).</p>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .auth-card { margin-top: 28px; }
+  .provider { margin-top: 4px; }
+  code { font-family: var(--mono); font-size: 13px; }
+</style>

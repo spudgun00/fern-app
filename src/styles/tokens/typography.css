@@ -1,0 +1,48 @@
+/* ============================================================
+   FERN · TYPOGRAPHY TOKENS
+   FAITHFUL COPY from spudgun00/fern (tokens/typography.css), 2026-06-30.
+   Fraunces (optical serif) for display + emotional emphasis,
+   Inter for body + UI, JetBrains Mono for technical labels.
+   ============================================================ */
+:root {
+  /* ---- Families ---- */
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* ---- Weights ---- */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+
+  /* ---- Display scale (Fraunces) — fluid ---- */
+  --display-hero:    clamp(38px, 6vw, 64px);   /* H1 hero */
+  --display-xl:      clamp(27px, 4vw, 40px);   /* section H2 */
+  --display-lg:      clamp(22px, 3.2vw, 32px); /* emphatic pull-quote */
+  --display-md:      27px;                      /* card H2 / step title */
+  --display-sm:      21px;                      /* card H3 */
+
+  /* ---- Body scale (Inter) ---- */
+  --text-lead:   clamp(16px, 2vw, 18.5px); /* hero lede */
+  --text-lg:     16.5px;
+  --text-base:   16px;
+  --text-sm:     14.5px;
+  --text-xs:     13px;
+
+  /* ---- Eyebrow / kicker ---- */
+  --eyebrow-size:    12px;
+  --eyebrow-spacing: 0.18em;
+  --eyebrow-weight:  600;
+
+  /* ---- Line heights ---- */
+  --leading-tight:   1.02;
+  --leading-snug:    1.15;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.6;
+
+  /* ---- Tracking ---- */
+  --tracking-display: -0.015em;
+  --tracking-tight:   -0.01em;
+  --tracking-label:   0.18em;
+  --tracking-mono:    0.22em;
+}

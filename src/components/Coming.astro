@@ -1,0 +1,41 @@
+---
+// Shared "coming" state for the P7 stub surfaces (messages, documents,
+// dashboard). Honest: a clearly-labelled placeholder, never implying a live
+// feature. Styled so the nav reads complete.
+export interface Props {
+  eyebrow: string;
+  title: string;
+  blurb: string;
+}
+const { eyebrow, title, blurb } = Astro.props;
+---
+<div class="wrap-narrow">
+  <div class="coming card">
+    <span class="pill pill-soft">Coming soon</span>
+    <span class="eyebrow coming-eyebrow">{eyebrow}</span>
+    <h1>{title}</h1>
+    <p class="lede">{blurb}</p>
+    <p class="coming-note">
+      This area is part of the planned patient zone and is not built in this
+      demonstration. The navigation is shown complete so the shape of the
+      product is clear.
+    </p>
+    <a href="/dashboard" class="link">Back to dashboard</a>
+  </div>
+</div>
+
+<style>
+  .coming { text-align: left; }
+  .coming-eyebrow { margin-top: 18px; }
+  .coming h1 { margin-top: 6px; }
+  .coming .lede { margin-top: 12px; }
+  .coming-note {
+    margin-top: 18px;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--soft);
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .coming .link { display: inline-block; margin-top: 22px; }
+</style>

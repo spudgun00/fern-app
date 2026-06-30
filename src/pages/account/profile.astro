@@ -1,7 +1,8 @@
 ---
 // P1 profile capture. Collects demographic identity (sent to the clinical core,
-// not the app DB) and the GP info-sharing decision. Unstyled plumbing; the
-// design system arrives with patient-facing screens in a later phase.
+// not the app DB) and the GP info-sharing decision. Styled onto the D1 shell;
+// all logic + the form action are unchanged.
+import Layout from '../../layouts/Layout.astro';
 import { createAdminClient } from '../../lib/supabase/admin';
 import { ensureAccount, getGpSharing, getJourney } from '../../lib/accounts';
 
@@ -18,57 +19,73 @@ if (journey && journey.state !== 'registered') return Astro.redirect('/account/v
 const existingGp = await getGpSharing(admin, account.id);
 const error = Astro.url.searchParams.get('error');
 ---
+<Layout title="Your profile — Fern" navVariant="onboarding" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="steps">Step 1 of 2 &middot; Profile</span>
+      <h1>Your profile</h1>
+      <p class="lede">A few details about you and your GP, before we verify your identity.</p>
+    </div>
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Your profile &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Your profile</h1>
-    <p>Step 1 of 2. Signed in as {user.email}. <a href="/logout">Log out</a></p>
-    {error && <p style="color: red">{error}</p>}
+    <form method="POST" action="/api/account/profile" class="auth-card">
+      {error && <p class="notice notice-error">{error}</p>}
 
-    <form method="POST" action="/api/account/profile">
-      <h2>About you</h2>
-      <p><label>Full name <input type="text" name="fullName" required /></label></p>
-      <p><label>Date of birth <input type="date" name="dateOfBirth" required /></label></p>
-      <p><label>Contact phone <input type="tel" name="contact" required /></label></p>
+      <div class="card stack">
+        <h2>About you</h2>
+        <label class="field">
+          <span class="label">Full name</span>
+          <input type="text" name="fullName" required autocomplete="name" />
+        </label>
+        <label class="field">
+          <span class="label">Date of birth</span>
+          <input type="date" name="dateOfBirth" required />
+        </label>
+        <label class="field">
+          <span class="label">Contact phone</span>
+          <input type="tel" name="contact" required autocomplete="tel" />
+        </label>
+      </div>
 
-      <h2>Your GP</h2>
-      <p><label>GP name or practice <input type="text" name="gpPractice" /></label></p>
+      <div class="card stack">
+        <h2>Your GP</h2>
+        <label class="field">
+          <span class="label">GP name or practice</span>
+          <input type="text" name="gpPractice" />
+        </label>
 
-      <fieldset>
-        <legend>Sharing information with your GP</legend>
-        <p>
-          <label>
+        <fieldset>
+          <legend>Sharing information with your GP</legend>
+          <label class="choice">
             <input type="radio" name="gpDecision" value="consent" required />
-            I consent to Fern sharing relevant information with my GP
+            <span>I consent to Fern sharing relevant information with my GP</span>
           </label>
-        </p>
-        <p>
-          <label>
+          <label class="choice">
             <input type="radio" name="gpDecision" value="refused" />
-            I do not consent (a recorded risk note is required)
+            <span>I do not consent (a recorded risk note is required)</span>
           </label>
-        </p>
-        <p>
-          <label>
-            Risk note (required if you do not consent)<br />
-            <textarea name="riskNote" rows="3" cols="50"></textarea>
-          </label>
-        </p>
-      </fieldset>
+        </fieldset>
 
-      <button type="submit">Save and continue to ID check</button>
-    </form>
-    {
-      existingGp && (
-        <p>
+        <label class="field">
+          <span class="label">Risk note</span>
+          <textarea name="riskNote" rows="3"></textarea>
+          <span class="hint">Required if you do not consent to GP sharing.</span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-pri btn-block submit">Save and continue to ID check</button>
+
+      {existingGp && (
+        <p class="soft prev">
           Previously recorded GP-sharing decision: <code>{existingGp.decision}</code>
         </p>
-      )
-    }
-  </body>
-</html>
+      )}
+    </form>
+  </div>
+</Layout>
+
+<style>
+  .auth-card { margin-top: 28px; }
+  .submit { margin-top: 24px; }
+  .prev { margin-top: 16px; text-align: center; }
+  code { font-family: var(--mono); font-size: 13px; }
+</style>

@@ -1,28 +1,61 @@
 ---
-// Unstyled dev landing. P0 is internal plumbing; patient-facing design arrives later.
+import Layout from '../layouts/Layout.astro';
 const { user } = Astro.locals;
 ---
+{
+  user ? (
+    <Layout title="Fern patient zone" navVariant="patient" user={user} active="/dashboard">
+      <div class="wrap-narrow stack-lg">
+        <div>
+          <span class="eyebrow">Patient zone</span>
+          <h1>Welcome back</h1>
+          <p class="lede">
+            Signed in as {user.email}. Pick up where you left off, or jump
+            straight to your care.
+          </p>
+        </div>
+        <div class="card stack">
+          <h2>Your care</h2>
+          <p class="muted">
+            Your dashboard brings together your plan, treatment and next steps.
+          </p>
+          <div class="row">
+            <a href="/dashboard" class="btn btn-pri">Go to dashboard</a>
+            <a href="/treatment" class="btn btn-ghost">Your treatment</a>
+          </div>
+        </div>
+        <p class="soft devline">
+          Building this demo? The <a href="/dev/harness" class="link">dev harness</a> seeds and
+          drives the journeys.
+        </p>
+      </div>
+    </Layout>
+  ) : (
+    <Layout title="Fern patient zone" navVariant="public" user={null}>
+      <div class="wrap-narrow stack-lg">
+        <div>
+          <span class="eyebrow">Patient zone</span>
+          <h1>Menopause care, <em>online</em></h1>
+          <p class="lede">
+            Clinician-led perimenopause and menopause care. Create an account to
+            walk the patient journey, from identity and intake through to a
+            clinician decision, your treatment and membership.
+          </p>
+        </div>
+        <div class="row">
+          <a href="/signup" class="btn btn-pri">Create your account</a>
+          <a href="/login" class="btn btn-ghost">Log in</a>
+        </div>
+        <p class="soft">
+          This is a demonstration on dummy data.
+          <a href="/about-this-demo" class="link">About this demo</a>
+        </p>
+      </div>
+    </Layout>
+  )
+}
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Fern app (P0)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Fern patient zone &mdash; P0</h1>
-    <p>Foundation and adapter spine. Internal plumbing only.</p>
-    {
-      user ? (
-        <p>
-          Signed in as {user.email}. <a href="/dev/harness">Dev harness</a> &middot;{' '}
-          <a href="/logout">Log out</a>
-        </p>
-      ) : (
-        <p>
-          <a href="/signup">Sign up</a> &middot; <a href="/login">Log in</a>
-        </p>
-      )
-    }
-  </body>
-</html>
+<style>
+  .row { display: flex; flex-wrap: wrap; gap: 14px; }
+  .devline { padding-top: 8px; }
+</style>

@@ -1,0 +1,45 @@
+---
+import Layout from '../layouts/Layout.astro';
+const { user } = Astro.locals;
+---
+<Layout title="About this demo — Fern" navVariant="public" user={user} narrow>
+  <div class="wrap-narrow stack-lg">
+    <div>
+      <span class="eyebrow">About this demo</span>
+      <h1>A demonstration, not yet operating</h1>
+      <p class="lede">
+        This is the Fern patient zone, shown end to end on dummy data so the
+        experience can be walked and reviewed. It is not live care.
+      </p>
+    </div>
+
+    <div class="card stack">
+      <h2>What is real, and what is not</h2>
+      <p class="muted">
+        The patient and clinician journeys are real and fully wired: account and
+        identity, the two-lane intake, the clinician review and consult, payment,
+        booking, the video room, dispensing status and membership. You can walk
+        every happy and unhappy path.
+      </p>
+      <p class="muted">
+        The regulated clinical core (the medical record and real prescribing)
+        is deliberately a mock. No medicine is prescribed, no script is sent to a
+        real pharmacy, and no real patient data exists here. Where external
+        services are switched on, they run in test mode only.
+      </p>
+    </div>
+
+    <div class="panel stack">
+      <h3>No real patients, no live care</h3>
+      <p class="muted">
+        Fern delivers care only once registered to do so. Nothing here is medical
+        advice. If you need urgent help, contact your GP or NHS 111, or call 999
+        in an emergency.
+      </p>
+    </div>
+
+    <div>
+      <a href="/" class="btn btn-pri">Enter the demo</a>
+    </div>
+  </div>
+</Layout>

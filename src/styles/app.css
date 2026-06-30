@@ -1,0 +1,278 @@
+/* ============================================================
+   FERN PATIENT ZONE · app stylesheet (D1)
+   - Imports the vendored design system (the single source of
+     colour, type, spacing — a corrected copy of the marketing
+     tokens, see tokens/colors.css).
+   - Maps short variable names onto the canonical --fern-* / --font-*
+     tokens so scoped component CSS reads cleanly.
+   - Carries base element styles + shared app utilities + the app's
+     own component primitives (built FROM the tokens, never by
+     copying the marketing warm-hardcoded components verbatim).
+   ============================================================ */
+
+@import './tokens/fonts.css';
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+
+:root {
+  /* grounds */
+  --cream: var(--fern-cream);
+  --cream-2: var(--fern-cream-2);
+  --white: var(--fern-white);
+
+  /* navy */
+  --navy: var(--fern-navy);
+  --navy-deep: var(--fern-navy-deep);
+  --navy-900: var(--fern-navy-900);
+
+  /* periwinkle / lime */
+  --peri: var(--fern-periwinkle);
+  --peri-2: var(--fern-periwinkle-2);
+  --lime: var(--fern-lime);
+
+  /* text */
+  --text: var(--fern-text);
+  --muted: var(--fern-text-muted);
+  --soft: var(--fern-text-soft);
+  --faint: var(--fern-text-faint);
+
+  /* borders */
+  --border: var(--fern-border);
+  --border-d: var(--fern-border-dark);
+
+  /* inverse */
+  --inv: var(--fern-text-inverse);
+  --inv-strong: var(--fern-text-inverse-strong);
+  --inv-muted: var(--fern-text-inverse-muted);
+  --inv-faint: var(--fern-text-inverse-faint);
+  --on-navy: var(--fern-on-navy);
+
+  /* type short names */
+  --disp: var(--font-display);
+  --body: var(--font-body);
+  --mono: var(--font-mono);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- layout ---- */
+.wrap { max-width: var(--container-max, 1080px); margin: 0 auto; padding: 0 28px; }
+.wrap-narrow { max-width: 560px; margin: 0 auto; padding: 0 28px; }
+
+/* the app's main content rhythm: comfortable vertical breathing room */
+.page { padding: 56px 0 96px; }
+.page-narrow { padding: 48px 0 96px; }
+
+/* ---- type ---- */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--navy);
+  opacity: 0.65;
+  display: inline-block;
+  margin-bottom: 14px;
+}
+h1, h2, h3 {
+  font-family: var(--disp);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+  color: var(--navy);
+  margin: 0;
+}
+h1 { font-size: clamp(32px, 5vw, 48px); }
+h2 { font-size: clamp(24px, 3.4vw, 34px); }
+h3 { font-size: 21px; letter-spacing: -0.01em; }
+em { font-style: italic; font-weight: 500; }
+p { margin: 0; }
+a { color: var(--navy); }
+
+.lede {
+  font-size: clamp(16px, 1.8vw, 18.5px);
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 58ch;
+}
+h1 + .lede, h2 + .lede, h3 + .lede { margin-top: 14px; }
+.muted { color: var(--muted); }
+.soft  { color: var(--soft); }
+
+/* ---- buttons / links ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 15.5px;
+  border: none;
+  border-radius: 14px;
+  padding: 14px 26px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform var(--dur-quick, 0.2s) var(--ease-unfurl, ease),
+              box-shadow var(--dur-quick, 0.2s) var(--ease-unfurl, ease),
+              border-color var(--dur-quick, 0.2s) ease;
+}
+.btn-pri {
+  background: var(--navy);
+  color: var(--on-navy);
+  box-shadow: 0 14px 30px -14px rgba(27, 28, 58, 0.55);
+}
+.btn-pri:hover { transform: translateY(-1px); box-shadow: 0 18px 34px -14px rgba(27, 28, 58, 0.6); }
+.btn-ghost {
+  background: transparent;
+  color: var(--navy);
+  border: 1px solid rgba(27, 28, 58, 0.35);
+  font-weight: 500;
+}
+.btn-ghost:hover { border-color: rgba(27, 28, 58, 0.6); }
+.btn-block { width: 100%; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.link {
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--navy);
+  text-decoration: none;
+  border-bottom: 2px solid var(--navy);
+  padding-bottom: 1px;
+}
+.link:hover { opacity: 0.7; }
+
+/* ---- card / panel ---- */
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card, 22px);
+  box-shadow: var(--shadow-card);
+  padding: 32px;
+}
+.panel {
+  background: var(--cream-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-box, 16px);
+  padding: 20px 22px;
+}
+.card + .card, .card + .panel, .panel + .panel { margin-top: 20px; }
+.stack > * + * { margin-top: 16px; }
+.stack-lg > * + * { margin-top: 28px; }
+
+/* ---- forms ---- */
+.field { display: block; margin: 0 0 18px; }
+.field > .label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  margin-bottom: 7px;
+}
+.field .hint { display: block; font-size: 13px; color: var(--soft); margin-top: 6px; }
+input[type="text"], input[type="email"], input[type="password"],
+input[type="tel"], input[type="date"], textarea, select {
+  width: 100%;
+  font-family: var(--body);
+  font-size: 15.5px;
+  color: var(--text);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 14px);
+  padding: 12px 14px;
+  transition: border-color var(--dur-quick, 0.2s) ease, box-shadow var(--dur-quick, 0.2s) ease;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(27, 28, 58, 0.12);
+}
+textarea { resize: vertical; min-height: 84px; }
+fieldset { border: 1px solid var(--border); border-radius: var(--radius-box, 16px); padding: 16px 18px; margin: 0 0 18px; }
+legend { font-size: 14px; font-weight: 600; color: var(--navy); padding: 0 6px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; font-size: 15px; color: var(--text); }
+.choice input { width: auto; margin-top: 3px; }
+
+/* ---- status pills ---- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill, 999px);
+  padding: 5px 12px;
+  background: var(--peri);
+  color: var(--navy);
+}
+.pill-soft  { background: var(--cream-2); color: var(--muted); border: 1px solid var(--border); }
+.pill-warn  { background: rgba(181, 86, 78, 0.12); color: var(--fern-warn); }
+
+/* ---- notices ---- */
+.notice {
+  font-size: 14.5px;
+  line-height: 1.6;
+  border-radius: var(--radius-box, 16px);
+  padding: 14px 16px;
+}
+.notice-error { background: rgba(181, 86, 78, 0.10); color: var(--fern-warn); border: 1px solid rgba(181, 86, 78, 0.35); }
+.notice-info  { background: var(--peri); color: var(--navy); }
+
+/* ---- step indicator (onboarding) ---- */
+.steps { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+
+/* ---- accessibility ---- */
+:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: absolute;
+  left: 12px; top: -48px;
+  background: var(--navy);
+  color: var(--on-navy);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 100;
+  transition: top var(--dur-quick, 0.2s) ease;
+}
+.skip-link:focus { top: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,122 @@
+/* ============================================================
+   FERN · COLOR TOKENS  (Allara direction)
+   ------------------------------------------------------------
+   FAITHFUL COPY of the marketing design system, snapshotted from
+   the spudgun00/fern repo (tokens/colors.css) on 2026-06-30.
+   This is a deliberate one-time copy, NOT a live share: if the
+   marketing palette changes, re-sync manually.
+
+   CORRECTION APPLIED ON COPY (load-bearing, do not revert):
+   the page-ground cream was corrected from the too-warm #F4EFE5
+   to #F8F7F0 (Allara's actual value, from James's token audit).
+   Every #F4EFE5 here is replaced with #F8F7F0 and every
+   rgba(244,239,229,..) with rgba(248,247,240,..). The marketing
+   repo at HEAD still ships the stale #F4EFE5; it needs the same
+   fix on its main. Do NOT "restore" #F4EFE5 thinking it is faithful.
+
+   Repointed from the original warm palette to: warm cream ground,
+   deep navy for primary actions / dark bands / headings, soft
+   periwinkle as an accent SURFACE, and lime as a single rare pop.
+
+   The Allara-named tokens below are canonical. The original
+   --fern-* names are kept as LEGACY ALIASES so existing components
+   keep rendering. Prefer the Allara names in new code.
+
+   CAVEAT: some marketing components (Button, Chip, Badge, Eyebrow,
+   TextField) contain HARDCODED warm hex values that these tokens
+   cannot override. In this app we build from these tokens, never
+   by copying those warm components verbatim.
+   ============================================================ */
+:root {
+  /* ---- Allara palette (canonical) ---- */
+  --fern-cream:        #F8F7F0;  /* dominant page ground (corrected from #F4EFE5) */
+  --fern-cream-2:      #FBF8F1;  /* light cream, ground variation */
+  --fern-white:        #FFFFFF;  /* cards + the proof band */
+
+  --fern-navy:         #1B1C3A;  /* primary action, dark bands, footer, all headings */
+  --fern-navy-deep:    #14152A;  /* footer, deepest */
+  --fern-navy-900:     #25264A;  /* raised card on navy */
+
+  --fern-periwinkle:   #C6CEF4;  /* accent SURFACE — never a button */
+  --fern-periwinkle-2: #BFCBF2;  /* gradient depth (closer CTA band) */
+
+  --fern-lime:         #D6F034;  /* rare pop — the "Fern." dot on dark grounds */
+
+  --fern-on-navy:      #FBF8F1;  /* cream text on a navy fill */
+  --fern-warn:         #B5564E;  /* functional error only, not brand */
+
+  /* ---- Text on light ---- */
+  --fern-text:         #1B1C3A;
+  --fern-text-muted:   #5B5C72;
+  --fern-text-soft:    #8A8B9C;
+  --fern-text-faint:   #AEAFC0;
+
+  /* ---- Text on navy ---- */
+  --fern-text-inverse:        #F8F7F0;  /* corrected from #F4EFE5 */
+  --fern-text-inverse-strong: #FFFFFF;
+  --fern-text-inverse-muted:  rgba(248,247,240,0.84);  /* corrected from rgba(244,239,229,..) */
+  --fern-text-inverse-faint:  rgba(248,247,240,0.55);  /* corrected from rgba(244,239,229,..) */
+
+  /* ---- Borders / hairlines ---- */
+  --fern-border:       #E4DDD0;  /* hairline on cream */
+  --fern-border-dark:  #33345A;  /* hairline on navy */
+  --fern-divider-dark: #2A2B48;
+
+  /* ============================================================
+     LEGACY ALIASES
+     The original warm names now map to Allara roles so existing
+     components keep working. Prefer the Allara names above.
+     ============================================================ */
+  --fern-aubergine:        var(--fern-navy);
+  --fern-aubergine-deep:   var(--fern-navy-deep);
+  --fern-aubergine-900:    var(--fern-navy-900);
+  --fern-ink:              var(--fern-navy);
+
+  --fern-marigold:         var(--fern-navy);      /* was the action fill → navy */
+  --fern-marigold-deep:    var(--fern-navy);      /* eyebrows / links on light → navy */
+  --fern-marigold-text:    var(--fern-on-navy);   /* text on the navy fill → cream */
+
+  --fern-sage:             var(--fern-navy);       /* dots / secondary emphasis → navy */
+  --fern-sage-tip:         var(--fern-navy);
+  --fern-sage-light:       var(--fern-periwinkle); /* accent on dark → periwinkle */
+  --fern-sage-text:        var(--fern-navy);       /* text on a periwinkle surface → navy */
+
+  --fern-terracotta:       var(--fern-warn);
+  --fern-terracotta-soft:  #E8A99F;
+  --fern-plum:             var(--fern-navy);
+
+  --fern-paper:            var(--fern-cream);
+  --fern-surface:          var(--fern-white);
+  --fern-surface-2:        var(--fern-cream-2);
+  --fern-paper-warm:       var(--fern-cream-2);
+  --fern-surface-sage:     var(--fern-periwinkle); /* secondary / confirmation surface → periwinkle */
+
+  /* ============================================================
+     SEMANTIC ALIASES — prefer these in product code
+     ============================================================ */
+  --color-bg:            var(--fern-cream);
+  --color-bg-dark:       var(--fern-navy);
+  --surface-card:        var(--fern-white);
+  --surface-raised:      var(--fern-cream-2);
+  --surface-success:     var(--fern-periwinkle);
+
+  --text-heading:        var(--fern-navy);
+  --text-body:           var(--fern-text-muted);
+  --text-eyebrow:        var(--fern-navy);
+  --text-on-dark:        var(--fern-text-inverse);
+
+  --color-accent:        var(--fern-periwinkle);  /* brand accent surface */
+  --color-action:        var(--fern-navy);        /* primary action fill */
+  --color-action-text:   var(--fern-on-navy);
+  --color-secondary:     var(--fern-periwinkle);
+  --color-danger:        var(--fern-warn);
+
+  --border-hairline:     var(--fern-border);
+  --border-hairline-dark:var(--fern-border-dark);
+
+  /* selection */
+  --selection-bg:        var(--fern-periwinkle);
+  --selection-fg:        var(--fern-navy);
+}
+
+::selection { background: var(--selection-bg); color: var(--selection-fg); }

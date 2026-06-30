@@ -10,6 +10,13 @@ live only here. Authoritative spec: `docs/fern-patient-zone-build-spec.md` — r
 it before building. Build is phased (P0…P7); **build one phase, prove its success
 test on the deployed URL, then stop**. Do not build ahead of a passing test.
 
+On top of P0–P6 there is now a **demo-polish track (D1–D7)**, specced in
+`docs/fern-demo-build-spec.md`: turn the proven-but-unstyled app into a complete,
+self-walkable DEMO on dummy data (design system, demo personas, test-mode real
+services, transactional email, sitewide demo banner + P7 stubs) while the
+regulated core stays MOCK. Same cadence. The marketing design source is the
+separate `spudgun00/fern` repo, cloned as a sibling at `../fern-marketing`.
+
 Status: **P6 built and proven** (full lane: booking + patient consult room +
 clinician consult console — **full lane closes; the initiation path is operable**),
 deployed at https://fern-app.jimgill.workers.dev. P0 (foundation + adapter spine +
@@ -27,6 +34,22 @@ script "Sent to the pharmacy"); the decided consult drops out of the consult que
 P1's Test C (real Stripe Identity test-mode path), P5's real Stripe Checkout/Billing
 path, and P6's real Cal.com + Daily paths are all wired-but-unclosed (need the test
 secrets set, see below). P7 not started.
+
+**Demo track status: D1 built and proven** (design foundation + app shell +
+sitewide demo banner + P7 "coming" stubs). The corrected Fern design system is
+vendored into `src/styles/tokens/` (a faithful copy of the marketing tokens with
+the cream ground corrected from the stale `#F4EFE5` to `#F8F7F0`; a test locks
+this). Shared shell in `src/layouts/Layout.astro` + `src/components/`
+(`Nav` variants public/onboarding/patient/clinician, `Footer`, `Wordmark`,
+`Coming`). The demo banner is injected sitewide by the middleware
+(`src/lib/demo-banner.ts`) so it shows on EVERY route, including surfaces not yet
+on the Layout (clinician console, dev harness) until D2/D3 bring them across.
+Proved on the deployed URL: the entry/auth/account/about surfaces render as Fern
+(corrected cream, navy Fraunces, Inter, the marketing card/band/button rules); the
+banner shows on every route incl. the unstyled `/clinician` and `/dev/harness`;
+the Dashboard/Treatment/Messages/Documents stubs appear in the patient nav and the
+stub pages render a styled "coming" state. `npm test`: **80 passed** (71 + 9 D1
+tests). D2–D7 not started.
 
 ## Stack
 
@@ -349,6 +372,34 @@ no-keys in-app mock room (`/consult/room/mock`) working.
   decided consult drops out of `/clinician/consults`. The refuse path
   (`consult_done -> refused`) is proven by `test/p6-consult.test.ts`. `npm test`:
   71 passed.
+
+### Known gaps before go-live (do NOT lose these)
+
+These survive into later phases. None blocks the spine; (a) is the one that matters before go-live.
+
+- **(a) Consult ATTENDANCE is not enforced, only booking is (touches the hard line).**
+  `consult_booked -> consult_done` is auto-advanced INSIDE `decideConsultAction`
+  as a side effect of Issue/Refuse, so a clinician can currently issue a script
+  from a booked consult the patient never joined. The hard line says "the script
+  follows a real consult" but the code only proves *booked*, not *attended*. With
+  real Daily, gate `consult_done` on an attendance signal (a `meeting.ended` /
+  participant-joined webhook) so "assessed" is proven, not asserted — and make
+  "the consult took place" its own event, decoupled from the prescribing decision
+  (the same decision-vs-dispensing separation the codebase already prizes).
+- **(b) No DEFERRED outcome.** The full-lane bar is Issue | Refuse; Refuse is terminal
+  and signposts the patient AWAY (GP / NHS 111). The common clinical middle ground
+  ("I can't decide yet — needs bloods / a proper BP / GP records, come back") has
+  nowhere to go: it wrongly collapses into Refuse. The right future addition is a
+  *deferred / pending-investigation* outcome that KEEPS the patient in the journey
+  (a new state + transition), NOT an "escalate" button (escalate has no target in
+  the assessed lane) and NOT "refer out".
+- **(c) Two edges.** `CalcomBooking.getBookingStatus` scans only the last 50 bookings
+  by metadata `fernRef`; fine as the webhook fallback it is, but it will miss anything
+  past that window, so do not lean on the poll at volume — the webhook stays
+  authoritative. And the consult console reads the patient's LATEST intake_ref, which is the
+  correct one today but is an assumption that breaks once a patient has more than
+  one intake (e.g. fast-then-escalated, or a repeat). Tie the consult to a specific
+  intake pointer when that becomes possible.
 
 ## Verifying
 

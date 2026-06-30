@@ -1,0 +1,49 @@
+/* ============================================================
+   FERN · SPACING, RADII, SHADOW, MOTION TOKENS
+   FAITHFUL COPY from spudgun00/fern (tokens/spacing.css), 2026-06-30.
+   Shadows / glow / focus are navy-tinted for the Allara direction.
+   ============================================================ */
+:root {
+  /* ---- Spacing scale (8px base) ---- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* section rhythm */
+  --section-y:    78px;
+  --container-max: 1080px;
+  --container-pad: 28px;
+
+  /* ---- Corner radii ---- */
+  --radius-sm:      4px;
+  --radius-tile:    10px;
+  --radius-control: 14px;  /* inputs + buttons */
+  --radius-box:     16px;  /* status / confirmation boxes */
+  --radius-card:    22px;  /* content cards */
+  --radius-pill:    999px; /* chips, badges, capsule buttons */
+
+  /* ---- Shadows (navy-tinted, never grey/warm) ---- */
+  --shadow-card:   0 1px 2px rgba(27,28,58,0.06);
+  --shadow-soft:   0 1px 3px rgba(0,0,0,0.08);
+  --shadow-raised: 0 12px 30px rgba(27,28,58,0.16);
+  --glow-marigold: 0 12px 28px -12px rgba(27,28,58,0.55);
+  --glow-navy:     0 12px 28px -12px rgba(27,28,58,0.55);
+
+  /* ---- Focus ---- */
+  --focus-ring: 2px solid var(--fern-navy);
+  --focus-offset: 3px;
+
+  /* ---- Motion ---- */
+  --ease-unfurl: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-quick:   0.2s;
+  --dur-base:    0.55s;
+  --dur-unfurl:  2.7s;
+}

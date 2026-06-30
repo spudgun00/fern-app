@@ -1,27 +1,35 @@
 ---
-// Minimal unstyled log-in. P0 plumbing only.
+import Layout from '../layouts/Layout.astro';
 if (Astro.locals.user) return Astro.redirect('/dev/harness');
 const error = Astro.url.searchParams.get('error');
 ---
+<Layout title="Log in — Fern" navVariant="public" user={null} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Welcome back</span>
+      <h1>Log in</h1>
+      <p class="lede">Sign in to continue your Fern patient journey.</p>
+    </div>
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Log in &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Log in</h1>
-    {error && <p style="color: red">{error}</p>}
-    <form method="POST" action="/api/auth/login">
-      <p>
-        <label>Email <input type="email" name="email" required /></label>
-      </p>
-      <p>
-        <label>Password <input type="password" name="password" required /></label>
-      </p>
-      <button type="submit">Log in</button>
+    <form method="POST" action="/api/auth/login" class="card auth-card">
+      {error && <p class="notice notice-error">{error}</p>}
+      <label class="field">
+        <span class="label">Email</span>
+        <input type="email" name="email" required autocomplete="email" />
+      </label>
+      <label class="field">
+        <span class="label">Password</span>
+        <input type="password" name="password" required autocomplete="current-password" />
+      </label>
+      <button type="submit" class="btn btn-pri btn-block">Log in</button>
     </form>
-    <p>No account? <a href="/signup">Sign up</a></p>
-  </body>
-</html>
+
+    <p class="soft alt">No account? <a href="/signup" class="link">Sign up</a></p>
+  </div>
+</Layout>
+
+<style>
+  .auth-card { margin-top: 28px; }
+  .auth-card .field:last-of-type { margin-bottom: 22px; }
+  .alt { margin-top: 20px; text-align: center; }
+</style>

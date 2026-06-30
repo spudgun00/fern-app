@@ -1,0 +1,27 @@
+---
+// The "Fern." wordmark. The full stop is the brand accent:
+// navy on light grounds, lime on dark grounds.
+// Copied faithfully from the marketing design system (Wordmark.astro).
+export interface Props {
+  dot?: 'navy' | 'lime';
+  size?: string;
+}
+const { dot = 'navy', size } = Astro.props;
+---
+<span class:list={['wordmark', `dot-${dot}`]} style={size ? `font-size:${size}` : undefined}>
+  Fern<b aria-hidden="true">.</b>
+</span>
+
+<style>
+  .wordmark {
+    font-family: var(--disp);
+    font-weight: 600;
+    font-size: 23px;
+    color: var(--navy);
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .dot-navy b { color: var(--navy); }
+  .dot-lime { color: var(--inv-strong); }
+  .dot-lime b { color: var(--lime); }
+</style>
