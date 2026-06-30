@@ -234,7 +234,11 @@ legend { font-size: 14px; font-weight: 600; color: var(--navy); padding: 0 6px; 
   padding: 14px 16px;
 }
 .notice-error { background: rgba(181, 86, 78, 0.10); color: var(--fern-warn); border: 1px solid rgba(181, 86, 78, 0.35); }
+/* periwinkle is the brand confirmation surface (see colors.css --surface-success):
+   notice-info carries the positive / confirmed states (paid, booked, approved). */
 .notice-info  { background: var(--peri); color: var(--navy); }
+/* neutral, lower-key notice for in-progress / informational holds (not a confirmation). */
+.notice-soft  { background: var(--cream-2); color: var(--muted); border: 1px solid var(--border); }
 
 /* ---- step indicator (onboarding) ---- */
 .steps { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }

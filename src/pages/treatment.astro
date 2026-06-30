@@ -6,7 +6,8 @@
 //
 // Copy stays plain and factual: this shows the patient their own prescription
 // record and its dispensing progress, never promotional / marketing-style copy.
-// Unstyled plumbing; the design system arrives later.
+// Styled onto the D1 shell (D2); all view logic + the form actions are unchanged.
+import Layout from '../layouts/Layout.astro';
 import { createAdminClient } from '../lib/supabase/admin';
 import { getClinicalCore, getDispensing } from '../lib/adapters/factory';
 import { ensureAccount, getJourney } from '../lib/accounts';
@@ -37,112 +38,176 @@ const statusLabel = (s: string | undefined) => (s ? (STATUS_COPY[s] ?? s) : 'Not
 const isMock = env.DISPENSING_IMPL !== 'stripe' && env.DISPENSING_IMPL !== 'cloudrx';
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Your treatment &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Your treatment</h1>
-    <p>
-      Signed in as {user.email}. <a href="/intake">Back to intake</a> &middot;{' '}
-      <a href="/account/billing">Membership and billing</a> &middot;{' '}
-      <a href="/logout">Log out</a>
-    </p>
-    {error && <p style="color: #b00">{error}</p>}
-    {notice && <p style="color: #060">{notice}</p>}
+<Layout title="Your treatment — Fern" navVariant="patient" user={user} active="/treatment" narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Your care</span>
+      <h1>Your treatment</h1>
+    </div>
+
+    {error && <p class="notice notice-error top-notice">{error}</p>}
+    {notice && <p class="notice notice-info top-notice">{notice}</p>}
 
     {
       !view.script ? (
-        <section>
-          <p>
+        <div class="card step-card stack">
+          <span class="pill pill-soft">No prescription yet</span>
+          <p class="muted">
             You do not have an issued prescription yet. Once a clinician has
             reviewed your intake and approved treatment, your prescription and its
             dispensing progress will appear here.
           </p>
-          <p>Current status: <code>{journey?.state}</code></p>
-        </section>
+          <p class="soft devline">
+            <span class="dev-tag">Demo detail</span>
+            state <code>{journey?.state}</code>
+          </p>
+        </div>
       ) : (
         <>
-          <section>
-            <h2>Your current prescription</h2>
-            <p>This is your prescription record, issued by a clinician.</p>
-            <ul>
+          <div class="card rx-card top-notice">
+            <div class="rx-head">
+              <h2>Your current prescription</h2>
+              <span class="pill">Issued by a clinician</span>
+            </div>
+            <p class="muted">This is your prescription record, issued by a clinician.</p>
+            <ul class="rx-items">
               {view.script.request.items.map((it) => (
                 <li>
-                  {it.name}
-                  {it.dose ? ` — ${it.dose}` : ''}
-                  {it.quantity ? ` (quantity ${it.quantity})` : ''}
+                  <span class="rx-name">{it.name}</span>
+                  {it.dose ? <span class="rx-meta"> &middot; {it.dose}</span> : ''}
+                  {it.quantity ? <span class="rx-meta"> &middot; quantity {it.quantity}</span> : ''}
                 </li>
               ))}
             </ul>
-            <p>
-              Issued: {new Date(view.script.issuedAt).toLocaleString('en-GB')}
+            <p class="soft issued">
+              Issued {new Date(view.script.issuedAt).toLocaleString('en-GB')}
             </p>
-          </section>
+          </div>
 
-          <section>
-            <h2>Dispensing</h2>
-            <p>
-              Dispensed by our pharmacy partner (a GPhC-registered pharmacy).
-              Current status: <strong>{statusLabel(view.status?.status)}</strong>.
+          <div class="card">
+            <div class="rx-head">
+              <h2>Dispensing</h2>
+              <span class={`pill ${view.status?.status === 'delivered' ? '' : 'pill-soft'}`}>
+                {statusLabel(view.status?.status)}
+              </span>
+            </div>
+            <p class="muted">
+              Dispensed by our pharmacy partner, a GPhC-registered pharmacy.
             </p>
-            <p>Journey state: <code>{journey?.state}</code></p>
 
-            <h3>Tracking</h3>
+            <h3 class="track-h">Tracking</h3>
             {view.tracking && view.tracking.events.length > 0 ? (
-              <ol>
+              <ol class="track">
                 {view.tracking.events.map((e) => (
                   <li>
-                    {new Date(e.at).toLocaleString('en-GB')} &mdash; {e.description}
+                    <span class="track-at">{new Date(e.at).toLocaleString('en-GB')}</span>
+                    <span class="track-desc">{e.description}</span>
                   </li>
                 ))}
               </ol>
             ) : (
-              <p>No tracking updates yet.</p>
+              <p class="soft">No tracking updates yet.</p>
             )}
-          </section>
+          </div>
 
           {view.dispense && (
-            <section>
+            <div class="card">
               <h2>Repeat</h2>
               {view.canRequestRepeat ? (
                 <>
-                  <p>
+                  <p class="muted repeat-copy">
                     If you are due to continue this treatment, you can request a
                     repeat. Your membership covers it at no extra consultation
                     charge, and a clinician reviews every repeat before it is
                     dispensed.
                   </p>
                   <form method="POST" action="/api/treatment/repeat">
-                    <button type="submit">Request a repeat</button>
+                    <button type="submit" class="btn btn-pri">Request a repeat</button>
                   </form>
                 </>
               ) : (
-                <p>
+                <p class="muted repeat-copy">
                   Repeat prescriptions are covered by membership.{' '}
-                  <a href="/account/billing">Subscribe to membership</a> to request
-                  repeats reviewed by a clinician at no extra consultation charge.
+                  <a href="/account/billing" class="link">Subscribe to membership</a> to
+                  request repeats reviewed by a clinician at no extra consultation charge.
                 </p>
               )}
-            </section>
+            </div>
           )}
 
           {isMock && view.dispense && view.status?.status !== 'delivered' && (
-            <section style="margin-top: 2rem; padding: 0.5rem; border: 1px dashed #999">
-              <p>
-                <strong>Dev only.</strong> Mock dispensing: step the status
-                forward (submitted &rarr; dispatched &rarr; delivered). The real
-                CloudRx pushes these updates itself.
+            <div class="dev-panel">
+              <span class="pill pill-soft">Demo control</span>
+              <p class="muted dev-copy">
+                Step the dispensing status forward (submitted &rarr; dispatched
+                &rarr; delivered). In the live service the pharmacy pushes these
+                updates itself.
               </p>
               <form method="POST" action="/api/dev/advance-dispense">
-                <button type="submit">Advance mock dispensing status</button>
+                <button type="submit" class="btn btn-ghost">Advance dispensing status</button>
               </form>
-            </section>
+            </div>
           )}
         </>
       )
     }
-  </body>
-</html>
+  </div>
+</Layout>
+
+<style>
+  .top-notice { margin-top: 24px; }
+  .step-card .devline { margin-top: 4px; }
+  .rx-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .rx-head h2 { font-size: 22px; }
+  .rx-card .muted { margin-top: 8px; }
+  .rx-items { list-style: none; margin: 16px 0 0; padding: 0; }
+  .rx-items li {
+    padding: 12px 14px;
+    background: var(--cream-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .rx-items li + li { margin-top: 8px; }
+  .rx-name { font-weight: 600; color: var(--navy); }
+  .rx-meta { color: var(--muted); font-size: 14.5px; }
+  .issued { margin-top: 14px; font-size: 13px; }
+
+  .track-h { font-size: 16px; margin-top: 20px; }
+  .track { list-style: none; margin: 12px 0 0; padding: 0; }
+  .track li {
+    position: relative;
+    padding: 0 0 16px 22px;
+    border-left: 2px solid var(--border);
+  }
+  .track li:last-child { padding-bottom: 0; border-left-color: transparent; }
+  .track li::before {
+    content: '';
+    position: absolute;
+    left: -6px; top: 3px;
+    width: 10px; height: 10px;
+    border-radius: 999px;
+    background: var(--peri);
+    border: 2px solid var(--navy);
+  }
+  .track-at { display: block; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em; color: var(--soft); }
+  .track-desc { display: block; font-size: 14.5px; color: var(--text); margin-top: 2px; }
+
+  .repeat-copy { margin-top: 6px; }
+
+  .dev-panel {
+    margin-top: 20px;
+    padding: 18px 20px;
+    background: var(--cream-2);
+    border: 1px dashed var(--border-d);
+    border-radius: var(--radius-box, 16px);
+  }
+  .dev-copy { margin: 10px 0 14px; font-size: 14px; }
+
+  .devline { font-size: 12.5px; }
+  .dev-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--faint); margin-right: 8px;
+  }
+  code { font-family: var(--mono); font-size: 12.5px; }
+  h2 { font-size: 22px; }
+</style>

@@ -2,10 +2,12 @@
 // P2 intake: the two-lane menopause/HRT questionnaire and its routing result.
 // Renders the questionnaire when the patient is verified and has not yet
 // submitted; otherwise shows the deterministic routing outcome (the lane, or a
-// red-flag signpost). Unstyled plumbing; the design system arrives later.
+// red-flag signpost). Styled onto the D1 shell (D2); all routing logic + the
+// form action are unchanged.
 //
 // Describe-never-diagnose: this screen states the NEXT STEP and a plain reason,
 // never a diagnosis or a treatment recommendation.
+import Layout from '../layouts/Layout.astro';
 import { createAdminClient } from '../lib/supabase/admin';
 import { getClinicalCore } from '../lib/adapters/factory';
 import { ensureAccount, getJourney, getLatestIntakeRef } from '../lib/accounts';
@@ -40,181 +42,256 @@ if (ref) {
 const error = Astro.url.searchParams.get('error');
 const riskQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'risk');
 const redFlagQuestions = SCREEN_QUESTIONS.filter((q) => q.kind === 'redFlag');
+
+// Positive / confirmed states use the periwinkle confirmation surface; the
+// stop + refusal signposts use the functional warn surface. In-review is neutral.
+const approved =
+  journey?.state === 'rx_issued' ||
+  journey?.state === 'approved' ||
+  journey?.state === 'dispensing' ||
+  journey?.state === 'delivered';
+const booked = journey?.state === 'consult_booked' || journey?.state === 'consult_done';
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Intake &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Menopause and HRT intake</h1>
-    <p>Signed in as {user.email}. <a href="/logout">Log out</a></p>
-    {error && <p style="color: red">{error}</p>}
-
+<Layout title="Your intake — Fern" navVariant="patient" user={user} narrow>
+  <div class="wrap-narrow">
     {
       ref && decision ? (
-        <section>
-          <h2>Your next step</h2>
+        <>
+          <div class="stack">
+            <span class="eyebrow">Menopause and HRT</span>
+            <h1>Your next step</h1>
+          </div>
+
+          {error && <p class="notice notice-error step-card">{error}</p>}
+
           {decision.outcome === 'fast' && journey?.state === 'in_review_queue' && (
-            <p>
-              Your answers have gone to our clinician review queue. A clinician
-              will review them and decide the next step. Nothing has been
-              prescribed: a clinician makes that decision.
-            </p>
+            <div class="card step-card stack">
+              <span class="pill pill-soft">In clinician review</span>
+              <p>
+                Your answers have gone to our clinician review queue. A clinician
+                will review them and decide the next step. Nothing has been
+                prescribed: a clinician makes that decision.
+              </p>
+            </div>
           )}
-          {(journey?.state === 'rx_issued' ||
-            journey?.state === 'approved' ||
-            journey?.state === 'dispensing' ||
-            journey?.state === 'delivered') && (
-            <p style="color: #060">
-              A clinician has reviewed your intake and approved treatment. Your
-              prescription has been issued and sent to the pharmacy.{' '}
-              <a href="/treatment">View your treatment and dispensing status &rarr;</a>
-            </p>
+
+          {approved && (
+            <div class="card step-card stack">
+              <span class="pill">Approved</span>
+              <p>
+                A clinician has reviewed your intake and approved treatment. Your
+                prescription has been issued and sent to the pharmacy.
+              </p>
+              <a href="/treatment" class="btn btn-pri">View your treatment and dispensing status</a>
+            </div>
           )}
+
           {journey?.state === 'escalated' && (
-            <p>
-              A clinician has reviewed your intake. The safer next step is an
-              assessed consultation with a clinician.{' '}
-              <a href="/consult">Book your consultation &rarr;</a>
-            </p>
+            <div class="card step-card stack">
+              <span class="pill pill-soft">Next: a consultation</span>
+              <p>
+                A clinician has reviewed your intake. The safer next step is an
+                assessed consultation with a clinician.
+              </p>
+              <a href="/consult" class="btn btn-pri">Book your consultation</a>
+            </div>
           )}
-          {(journey?.state === 'consult_booked' || journey?.state === 'consult_done') && (
-            <p style="color: #060">
-              Your assessed consultation is booked.{' '}
-              <a href="/consult">Go to your consult room &rarr;</a>
-            </p>
+
+          {booked && (
+            <div class="card step-card stack">
+              <span class="pill">Consultation booked</span>
+              <p>Your assessed consultation is booked.</p>
+              <a href="/consult" class="btn btn-pri">Go to your consult room</a>
+            </div>
           )}
+
           {journey?.state === 'refused' && (
-            <p style="color: #b00">
-              A clinician has reviewed your intake and we cannot continue your
-              request here. Please speak to your GP, or call NHS 111 if you need
-              advice sooner.
-            </p>
+            <div class="card step-card stack">
+              <span class="pill pill-warn">Cannot continue here</span>
+              <p>
+                A clinician has reviewed your intake and we cannot continue your
+                request here. Please speak to your GP, or call NHS 111 if you need
+                advice sooner.
+              </p>
+            </div>
           )}
-          {decision.outcome === 'full' &&
-            (journey?.state === 'intake_submitted') && (
+
+          {decision.outcome === 'full' && journey?.state === 'intake_submitted' && (
+            <div class="card step-card stack">
+              <span class="pill pill-soft">Next: a consultation</span>
               <p>
                 Based on your answers, the safer next step is an assessed
-                consultation with a clinician.{' '}
-                <a href="/consult">Book your consultation &rarr;</a>
+                consultation with a clinician.
               </p>
-            )}
-          {decision.outcome === 'stop' && decision.signpost && (
-            <p style="color: #b00">
-              We cannot continue your request here right now. {decision.signpost.message}{' '}
-              (Contact: <strong>{decision.signpost.service}</strong>.)
-            </p>
+              <a href="/consult" class="btn btn-pri">Book your consultation</a>
+            </div>
           )}
-          <p>
-            Routing outcome: <code>{decision.outcome}</code> &middot; lane:{' '}
-            <code>{decision.lane ?? '(none)'}</code> &middot; journey state:{' '}
-            <code>{journey?.state}</code>
+
+          {decision.outcome === 'stop' && decision.signpost && (
+            <div class="card step-card stack">
+              <span class="pill pill-warn">Cannot continue here</span>
+              <p>
+                We cannot continue your request here right now. {decision.signpost.message}
+              </p>
+              <p class="muted">Contact: <strong>{decision.signpost.service}</strong>.</p>
+            </div>
+          )}
+
+          {decision.reasons.length > 0 && (
+            <div class="panel why">
+              <h3>Why this next step</h3>
+              <ul class="reasons">
+                {decision.reasons.map((r) => (
+                  <li>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p class="soft devline">
+            <span class="dev-tag">Demo detail</span>
+            outcome <code>{decision.outcome}</code> &middot; lane{' '}
+            <code>{decision.lane ?? 'none'}</code> &middot; state <code>{journey?.state}</code>
           </p>
-          <ul>
-            {decision.reasons.map((r) => (
-              <li>{r}</li>
-            ))}
-          </ul>
-        </section>
+        </>
       ) : (
-        <form method="POST" action="/api/intake/submit">
-          <p>
-            This questionnaire describes your situation so we can route you to the
-            right next step. It does not give a diagnosis or recommend a
-            treatment.
-          </p>
+        <>
+          <div class="stack">
+            <span class="eyebrow">Menopause and HRT</span>
+            <h1>Your intake</h1>
+            <p class="lede">
+              This questionnaire describes your situation so we can route you to the
+              right next step. It does not give a diagnosis or recommend a treatment.
+            </p>
+          </div>
 
-          <fieldset>
-            <legend>Have you used this HRT before?</legend>
-            <p>
-              <label>
+          <form method="POST" action="/api/intake/submit" class="intake-form">
+            {error && <p class="notice notice-error">{error}</p>}
+
+            <fieldset class="card q-card">
+              <legend>Have you used this HRT before?</legend>
+              <label class="choice">
                 <input type="radio" name="treatmentHistory" value="continuing" required />
-                I am continuing or restarting HRT I have used before
+                <span>I am continuing or restarting HRT I have used before</span>
               </label>
-            </p>
-            <p>
-              <label>
+              <label class="choice">
                 <input type="radio" name="treatmentHistory" value="initiation" />
-                I am starting HRT for the first time
+                <span>I am starting HRT for the first time</span>
               </label>
-            </p>
-          </fieldset>
+            </fieldset>
 
-          <fieldset>
-            <legend>Which symptoms are you experiencing?</legend>
-            {SYMPTOM_OPTIONS.map((s) => (
-              <p>
-                <label>
+            <fieldset class="card q-card">
+              <legend>Which symptoms are you experiencing?</legend>
+              {SYMPTOM_OPTIONS.map((s) => (
+                <label class="choice">
                   <input type="checkbox" name="symptoms" value={s.id} />
-                  {s.label}
+                  <span>{s.label}</span>
                 </label>
-              </p>
-            ))}
-          </fieldset>
+              ))}
+            </fieldset>
 
-          <fieldset>
-            <legend>History and blood pressure</legend>
-            <p>
-              <label>
-                Months since your last period (leave blank if unsure)
-                <br />
+            <fieldset class="card q-card">
+              <legend>History and blood pressure</legend>
+              <label class="field">
+                <span class="label">Months since your last period</span>
                 <input type="number" name="monthsSinceLastPeriod" min="0" />
+                <span class="hint">Leave blank if you are unsure.</span>
               </label>
-            </p>
-            <p>
-              <label>
-                Most recent blood pressure &mdash; systolic (top number)
-                <br />
-                <input type="number" name="bpSystolic" min="0" />
-              </label>
-            </p>
-            <p>
-              <label>
-                Most recent blood pressure &mdash; diastolic (bottom number)
-                <br />
-                <input type="number" name="bpDiastolic" min="0" />
-              </label>
-            </p>
-          </fieldset>
-
-          <fieldset>
-            <legend>Your medical history</legend>
-            {riskQuestions.map((q) => (
-              <p>
-                {q.label}
-                <br />
-                <label>
-                  <input type="radio" name={q.name} value="yes" required /> Yes
-                </label>{' '}
-                <label>
-                  <input type="radio" name={q.name} value="no" /> No
+              <div class="bp-row">
+                <label class="field">
+                  <span class="label">Blood pressure &mdash; systolic</span>
+                  <input type="number" name="bpSystolic" min="0" placeholder="Top number" />
                 </label>
-              </p>
-            ))}
-          </fieldset>
-
-          <fieldset>
-            <legend>Safety check</legend>
-            {redFlagQuestions.map((q) => (
-              <p>
-                {q.label}
-                <br />
-                <label>
-                  <input type="radio" name={q.name} value="yes" required /> Yes
-                </label>{' '}
-                <label>
-                  <input type="radio" name={q.name} value="no" /> No
+                <label class="field">
+                  <span class="label">Blood pressure &mdash; diastolic</span>
+                  <input type="number" name="bpDiastolic" min="0" placeholder="Bottom number" />
                 </label>
-              </p>
-            ))}
-          </fieldset>
+              </div>
+            </fieldset>
 
-          <button type="submit">Submit intake</button>
-        </form>
+            <fieldset class="card q-card">
+              <legend>Your medical history</legend>
+              {riskQuestions.map((q) => (
+                <div class="yesno">
+                  <span class="yesno-q">{q.label}</span>
+                  <div class="yesno-opts">
+                    <label class="choice choice-inline">
+                      <input type="radio" name={q.name} value="yes" required /> <span>Yes</span>
+                    </label>
+                    <label class="choice choice-inline">
+                      <input type="radio" name={q.name} value="no" /> <span>No</span>
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </fieldset>
+
+            <fieldset class="card q-card">
+              <legend>Safety check</legend>
+              {redFlagQuestions.map((q) => (
+                <div class="yesno">
+                  <span class="yesno-q">{q.label}</span>
+                  <div class="yesno-opts">
+                    <label class="choice choice-inline">
+                      <input type="radio" name={q.name} value="yes" required /> <span>Yes</span>
+                    </label>
+                    <label class="choice choice-inline">
+                      <input type="radio" name={q.name} value="no" /> <span>No</span>
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </fieldset>
+
+            <button type="submit" class="btn btn-pri btn-block submit">Submit intake</button>
+          </form>
+        </>
       )
     }
-  </body>
-</html>
+  </div>
+</Layout>
+
+<style>
+  .step-card { margin-top: 24px; }
+  .step-card .btn { align-self: flex-start; }
+  .why { margin-top: 20px; }
+  .why h3 { font-size: 16px; margin-bottom: 6px; }
+  .reasons { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14.5px; line-height: 1.7; }
+
+  .devline { margin-top: 22px; font-size: 12.5px; }
+  .dev-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-right: 8px;
+  }
+  code { font-family: var(--mono); font-size: 12.5px; }
+
+  .intake-form { margin-top: 28px; }
+  .q-card { padding: 24px 26px; }
+  .q-card + .q-card { margin-top: 18px; }
+  .q-card legend {
+    font-family: var(--disp);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--navy);
+    padding: 0;
+    margin-bottom: 10px;
+  }
+  .choice-inline { display: inline-flex; padding: 8px 0; margin-right: 22px; }
+  .bp-row { display: flex; gap: 16px; }
+  .bp-row .field { flex: 1; margin-bottom: 0; }
+  .yesno { padding: 12px 0; border-top: 1px solid var(--border); }
+  .yesno:first-of-type { border-top: none; padding-top: 4px; }
+  .yesno-q { display: block; font-size: 15px; color: var(--text); margin-bottom: 4px; }
+  .yesno-opts { display: flex; gap: 0; }
+  .submit { margin-top: 24px; }
+
+  @media (max-width: 520px) {
+    .bp-row { flex-direction: column; gap: 0; }
+    .bp-row .field { margin-bottom: 16px; }
+  }
+</style>

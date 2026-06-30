@@ -35,8 +35,8 @@ P1's Test C (real Stripe Identity test-mode path), P5's real Stripe Checkout/Bil
 path, and P6's real Cal.com + Daily paths are all wired-but-unclosed (need the test
 secrets set, see below). P7 not started.
 
-**Demo track status: D1 built and proven** (design foundation + app shell +
-sitewide demo banner + P7 "coming" stubs). The corrected Fern design system is
+**Demo track status: D2 built and proven** (D1 design foundation + app shell;
+D2 patient surfaces styled). The corrected Fern design system is
 vendored into `src/styles/tokens/` (a faithful copy of the marketing tokens with
 the cream ground corrected from the stale `#F4EFE5` to `#F8F7F0`; a test locks
 this). Shared shell in `src/layouts/Layout.astro` + `src/components/`
@@ -46,10 +46,30 @@ this). Shared shell in `src/layouts/Layout.astro` + `src/components/`
 on the Layout (clinician console, dev harness) until D2/D3 bring them across.
 Proved on the deployed URL: the entry/auth/account/about surfaces render as Fern
 (corrected cream, navy Fraunces, Inter, the marketing card/band/button rules); the
-banner shows on every route incl. the unstyled `/clinician` and `/dev/harness`;
-the Dashboard/Treatment/Messages/Documents stubs appear in the patient nav and the
-stub pages render a styled "coming" state. `npm test`: **80 passed** (71 + 9 D1
-tests). D2–D7 not started.
+banner shows on every route; the Dashboard/Treatment/Messages/Documents stubs
+appear in the patient nav and the stub pages render a styled "coming" state.
+
+**D2 (patient surfaces styled)** restyles the whole patient happy path onto the D1
+shell + primitives — presentation only, no journey/routing/gate/logic change (the
+frontmatter of each page is untouched bar adding the `Layout` import): `intake`
+(the core questionnaire — styled fieldset cards + the routing outcome as a
+next-step card with a "why this next step" panel; describe-never-diagnose
+preserved), `consult` (pay-gate / book / room / refusal branches), `consult/book/mock`
+(slot picker), `consult/book/complete`, `consult/room/mock` (the video stand-in,
+now a navy stage), `treatment` (script + dispensing + a tracking timeline + repeat
++ the fenced dev advance-control), and `account/billing` (+ `billing/complete`,
+`billing/mock` checkout, `billing/mock-portal`). The mock provider stand-ins
+(checkout / scheduler / room / portal) wear a "Demo stand-in" pill; the dev
+affordances stay clearly fenced. The brand's periwinkle is the confirmation
+surface (paid / booked / approved / issued pills + `notice-info`); a `notice-soft`
+neutral was added to `app.css` for in-progress holds. No new palette, no warm
+leftovers. Proved on the deployed URL with a full FULL-LANE walk: intake
+(initiation) -> routes to the full lane -> pay the consult fee (mock checkout) ->
+book a slot (mock) -> `consult_booked` + minted room -> join the styled room ->
+a clinician issues at the consult -> patient `/treatment` shows the script "Sent
+to the pharmacy"; every screen is Fern, the journey advanced exactly as before.
+`npm test`: **80 passed** (D2 is presentation-only; its proof is the live-URL
+walk, not new tests). D3–D7 not started.
 
 ## Stack
 

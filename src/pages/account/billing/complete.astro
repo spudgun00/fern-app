@@ -4,6 +4,7 @@
 // activates the membership, and advances delivered -> active_member when
 // eligible. For Stripe the webhook is the authoritative path; this poll is a
 // belt-and-braces refresh and is idempotent with it.
+import Layout from '../../../layouts/Layout.astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
 import { getPayments } from '../../../lib/adapters/factory';
 import { ensureAccount, getJourney } from '../../../lib/accounts';
@@ -29,41 +30,67 @@ const view = await getBillingView(admin, account.id);
 const journey = await getJourney(admin, account.id);
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Payment &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Payment</h1>
-    {problem && <p style="color: #b00">{problem}</p>}
-    {
-      finalisedKind === 'consult' && (
-        <p style="color: #060">Your consultation fee is paid.</p>
-      )
-    }
-    {
-      finalisedKind === 'membership' && (
-        <p style="color: #060">Your membership is now active.</p>
-      )
-    }
-    {
-      !finalisedKind && !problem && (
-        <p>
-          Your payment is being confirmed. This can take a moment; reload this
-          page, or return to <a href="/account/billing">billing</a>.
-        </p>
-      )
-    }
-    <ul>
-      <li>Consultation fee: <code>{view.consultPaid ? 'paid' : 'unpaid'}</code></li>
-      <li>Membership: <code>{view.membership?.status ?? 'inactive'}</code></li>
-      <li>Journey state: <code>{journey?.state}</code></li>
-    </ul>
-    <p>
-      <a href="/account/billing">Back to billing</a> &middot;{' '}
-      <a href="/treatment">Your treatment</a>
+<Layout title="Payment — Fern" navVariant="patient" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Your account</span>
+      <h1>Payment</h1>
+    </div>
+
+    <div class="card step-card stack">
+      {problem && <p class="notice notice-error">{problem}</p>}
+      {finalisedKind === 'consult' && (
+        <>
+          <span class="pill">Paid</span>
+          <p>Your consultation fee is paid.</p>
+        </>
+      )}
+      {finalisedKind === 'membership' && (
+        <>
+          <span class="pill">Membership active</span>
+          <p>Your membership is now active.</p>
+        </>
+      )}
+      {!finalisedKind && !problem && (
+        <>
+          <span class="pill pill-soft">Confirming</span>
+          <p class="muted">
+            Your payment is being confirmed. This can take a moment; reload this
+            page, or return to billing.
+          </p>
+        </>
+      )}
+
+      <dl class="summary">
+        <div><dt>Consultation fee</dt><dd>{view.consultPaid ? 'paid' : 'unpaid'}</dd></div>
+        <div><dt>Membership</dt><dd>{view.membership?.status ?? 'inactive'}</dd></div>
+      </dl>
+
+      <div class="links-row">
+        <a href="/account/billing" class="link">Back to billing</a>
+        <a href="/treatment" class="link">Your treatment</a>
+      </div>
+    </div>
+
+    <p class="soft devline">
+      <span class="dev-tag">Demo detail</span>
+      state <code>{journey?.state}</code>
     </p>
-  </body>
-</html>
+  </div>
+</Layout>
+
+<style>
+  .step-card { margin-top: 24px; }
+  .step-card .pill { align-self: flex-start; }
+  .summary { margin: 8px 0 0; padding: 16px 0 0; border-top: 1px solid var(--border); }
+  .summary div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+  .summary dt { color: var(--muted); font-size: 14.5px; margin: 0; }
+  .summary dd { margin: 0; font-weight: 600; color: var(--navy); font-size: 14.5px; }
+  .links-row { display: flex; gap: 22px; }
+  .devline { margin-top: 18px; font-size: 12.5px; }
+  .dev-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--faint); margin-right: 8px;
+  }
+  code { font-family: var(--mono); font-size: 12.5px; }
+</style>

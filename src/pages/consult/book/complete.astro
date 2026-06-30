@@ -3,6 +3,7 @@
 // provider status and finalises: when booked, creates the video room and advances
 // intake_submitted/escalated -> consult_booked. For Cal.com the webhook is the
 // authoritative path; this poll is a belt-and-braces refresh, idempotent with it.
+import Layout from '../../../layouts/Layout.astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
 import { getBooking, getVideo } from '../../../lib/adapters/factory';
 import { ensureAccount, getJourney } from '../../../lib/accounts';
@@ -27,27 +28,52 @@ const journey = await getJourney(admin, account.id);
 const booked = journey?.state === 'consult_booked' || journey?.state === 'consult_done';
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Consult booking &mdash; Fern app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body>
-    <h1>Consult booking</h1>
-    {problem && <p style="color: #b00">{problem}</p>}
-    <p>Journey state: <code>{journey?.state ?? '(none)'}</code></p>
-    {
-      booked ? (
-        <p>
-          Your consultation is booked. <a href="/consult">Go to your consult room &rarr;</a>
-        </p>
-      ) : (
-        <p>
-          Not confirmed yet. Booking can take a moment; reload this page, or{' '}
-          <a href="/consult">go back to booking</a>.
-        </p>
-      )
-    }
-  </body>
-</html>
+<Layout title="Consult booking — Fern" navVariant="patient" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Assessed consultation</span>
+      <h1>Consult booking</h1>
+    </div>
+
+    <div class="card step-card stack">
+      {problem && <p class="notice notice-error">{problem}</p>}
+      {
+        booked ? (
+          <>
+            <span class="pill">Consultation booked</span>
+            <p>Your consultation is booked.</p>
+            <a href="/consult" class="btn btn-pri">Go to your consult room</a>
+          </>
+        ) : (
+          <>
+            <span class="pill pill-soft">Confirming</span>
+            <p class="muted">
+              Not confirmed yet. Booking can take a moment; reload this page, or
+              go back to booking.
+            </p>
+            <a href="/consult" class="link">Back to booking</a>
+          </>
+        )
+      }
+      <p class="soft devline">
+        <span class="dev-tag">Demo detail</span>
+        state <code>{journey?.state ?? 'none'}</code>
+      </p>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .step-card { margin-top: 24px; }
+  .step-card .btn, .step-card .link { align-self: flex-start; }
+  .devline { margin-top: 6px; font-size: 12.5px; }
+  .dev-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-right: 8px;
+  }
+  code { font-family: var(--mono); font-size: 12.5px; }
+</style>
