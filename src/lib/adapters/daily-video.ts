@@ -40,8 +40,23 @@ export class DailyVideo implements VideoAdapter {
     return json;
   }
 
-  private joinUrl(roomName: string): string {
-    return `https://${this.domain}.daily.co/${roomName}`;
+  // Mint a per-participant meeting token scoped to this room. Daily PRIVATE rooms
+  // (the model we want for a confidential consult) deny the bare room URL; the
+  // join URL must carry a `?t=<token>`. Minted per render, so each side gets its
+  // own token. Deliberately minimal: room-scoped only. Deferred for go-live (see
+  // the external-config checklist): `exp` tied to the appointment window, and
+  // `is_owner: true` for the clinician (host controls) -- the latter needs the
+  // role passed in, so it is intentionally out of scope here to keep this change
+  // contained to the adapter.
+  private async mintToken(roomName: string): Promise<string> {
+    const json = await this.call('/meeting-tokens', 'POST', {
+      properties: { room_name: roomName },
+    });
+    return String(json.token ?? '');
+  }
+
+  private joinUrl(roomName: string, token: string): string {
+    return `https://${this.domain}.daily.co/${roomName}?t=${token}`;
   }
 
   async createRoom(consultRef: string): Promise<VideoRoom> {
@@ -58,7 +73,8 @@ export class DailyVideo implements VideoAdapter {
       // anything else.
       if (!(err instanceof Error && /already exists/i.test(err.message))) throw err;
     }
-    return { roomRef: roomName, joinUrl: this.joinUrl(roomName) };
+    const token = await this.mintToken(roomName);
+    return { roomRef: roomName, joinUrl: this.joinUrl(roomName, token) };
   }
 
   async getRoom(roomRef: string): Promise<VideoRoom | null> {
@@ -68,6 +84,7 @@ export class DailyVideo implements VideoAdapter {
     } catch {
       return null;
     }
-    return { roomRef, joinUrl: this.joinUrl(roomRef) };
+    const token = await this.mintToken(roomRef);
+    return { roomRef, joinUrl: this.joinUrl(roomRef, token) };
   }
 }
