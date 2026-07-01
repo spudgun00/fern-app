@@ -972,6 +972,47 @@ compliance sign-off. Patient-facing PAGES for the weight GLP intake + pay-first
 checkout are thin wrappers over the proven `submitWeightIntake` /
 `startCheckout('treatment', ...)` orchestration and can be styled in a later demo pass.
 
+## fern.care apex cutover — DONE (2026-06-30 → 07-01) — CF config only, no repo/deploy change
+
+The **marketing** apex `fern.care` was cut over from the OLD `fern` Worker (the
+endo-waitlist site) to the NEW `fern-site` Cloudflare **Pages** project (the
+menopause marketing site, `fern-site-cpl.pages.dev`). This is separate infra from
+this patient-zone app (`fern-app.jimgill.workers.dev`), but it touches the SHARED
+`fern.care` apex that D5's email decision depends on, so it is recorded here.
+
+- **Reality diff from the runbook:** the old worker held the apex via a **Workers
+  Custom Domain** (a read-only `AAAA 100::` record with `origin_worker_id`), NOT
+  worker routes or apex A records (there were none of either). The cutover deleted
+  that custom-domain binding (`DELETE /accounts/{acct}/workers/domains/{id}`),
+  which removed the `AAAA 100::` automatically.
+- **Apex now:** a proxied **CNAME `fern.care` -> `fern-site-cpl.pages.dev`**
+  (Cloudflare flattens at apex; answers A + AAAA on the CF edge). Added the apex to
+  the Pages project (`POST .../pages/projects/fern-site/domains {name:fern.care}`);
+  status went `active` / cert `active`. NB the API POST does NOT auto-create the
+  routing record the dashboard wizard does — the CNAME had to be added by hand.
+- **D5 email assumption still holds:** the `brevo-code` TXT on the apex was
+  PRESERVED (the hard constraint), so the Brevo waitlist mail on the `fern.care`
+  apex is untouched and the app's transactional email stays isolated on the
+  `mail.fern.care` subdomain (no SPF collision — the whole reason D5 chose the
+  subdomain). Do not add app email senders to the apex.
+- **www:** still a proxied CNAME -> apex that **301s to `https://fern.care/`** (its
+  redirect survived the cutover; left alone, not added to Pages).
+- **`fern-subscribe` worker:** `REDIRECT_URL` var flipped
+  `https://fern-site-cpl.pages.dev/confirmed` -> `https://fern.care` (plain_text,
+  not a secret; the `BREVO_API_KEY` secret + `DOI_TEMPLATE_ID` were preserved via
+  `keep_bindings:["secret_text"]`). NOTE the old value carried a `/confirmed` path
+  that the bare apex drops — revisit if the DOI landing page matters.
+- **Rollback:** the old `fern` Worker script was NOT deleted (kept as rollback);
+  delete later via `DELETE /accounts/{acct}/workers/scripts/fern`, or roll back by
+  re-adding its `fern.care` Workers Custom Domain.
+- **Gotcha (cost real time):** during the ~7-min cutover window the apex returned
+  530 then TLS-pending; a client that queried in that window cached a negative
+  (NXDOMAIN) result for up to the SOA negative-TTL (~30 min), so `fern.care`
+  appeared "broken" locally while the CF edge served 200 (proven with
+  `curl --resolve fern.care:443:<edge-ip>` and `dig @1.1.1.1`). Fix: flush the
+  local resolver (`sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`)
+  or wait out the TTL — it is NOT a cutover failure.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and
