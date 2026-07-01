@@ -852,6 +852,43 @@ pushes/verifies, per the roadmap.
   unifies screening across menopause + weight. Real lab + real prescribing go live
   only on CQC + clinical lead + compliance sign-off.
 
+## Weight roadmap P3 done (bloods in the clinician console + the Weight/BMI check)
+
+Weight roadmap P3, on top of P2. Built + proven by `npm test` (126 passed, 117 ->
+126; +9). Not deployed. Surfaces the screening to the clinician and makes the
+guard's block VISIBLE in the console.
+
+- **Console data loader** `src/lib/screening/review.ts` — `getScreeningReview(admin,
+  screening, accountId)` returns `{ required, status, ready, blocked, panel }`. The
+  panel is read from the ScreeningAdapter (Article 9, server-side for display,
+  NEVER copied app-side) ONLY when `results_ready`; otherwise `blocked: true` and
+  no panel. It MIRRORS the guard, so the console can never show an enabled
+  prescribing action while `decideClinicianAction` / `decideConsultAction` would
+  reject it.
+- **Both clinician surfaces wired** (`clinician/intake/[id].astro` fast lane +
+  `clinician/consult/[id].astro` full lane): a "Screening (bloods)" card renders the
+  panel table when the results are in, or a "bloods pending — a prescribing decision
+  is blocked" `notice-soft` when not; the primary action (Approve / Issue) is
+  `disabled` when `review.blocked`, with an explanatory note. Escalate / Refuse stay
+  enabled (a clinician can always decline / route on). Presentation only — the
+  decision logic + the guard in the orchestration are unchanged.
+- **Weight/BMI verification sub-step** `src/lib/intake/weight.ts` —
+  `assessWeightEligibility({ bmi, hasRelatedCondition })` (BMI >= 30, or >= 27 with a
+  related condition; pure, mirrors the public suitability copy) + `weightCheckFromAnswers`
+  (pulls BMI out of the core intake answers, returns null for a menopause intake).
+  BMI is Article 9: the VALUE lives in the core intake answers, the console shows a
+  coarse eligibility pill as GUIDANCE — a clinician still decides. Surfaced as a
+  "Weight / BMI check" card on both consoles when a BMI is present.
+- **Tests** (`test/screening-review.test.ts`, 9): the pure eligibility check (>=30,
+  27+with-condition, below-threshold, invalid), the console helper (null for no
+  BMI), and `getScreeningReview` across the three states (none -> not required;
+  pending -> blocked + no panel; ready -> not blocked + panel surfaced). `astro
+  build` confirms both console pages compile.
+- **Still to come:** P4 (GLP intake lane / contraindication screen + pay-first
+  checkout + automatic refund-on-refusal), P5 (unify screening across menopause +
+  weight). The BMI CAPTURE form (patient side) lands with the P4 GLP intake lane;
+  P3 delivers the verification LOGIC + the console surfacing.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

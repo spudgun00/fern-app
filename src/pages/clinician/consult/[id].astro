@@ -7,7 +7,7 @@
 // Styled onto the D1 shell (D3); the decision logic + form actions are unchanged.
 import Layout from '../../../layouts/Layout.astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
-import { getClinicalCore, getVideo } from '../../../lib/adapters/factory';
+import { getClinicalCore, getScreening, getVideo } from '../../../lib/adapters/factory';
 import {
   ensureAccount,
   getAccountById,
@@ -17,6 +17,8 @@ import {
 } from '../../../lib/accounts';
 import { SYMPTOM_OPTIONS, SCREEN_QUESTIONS } from '../../../lib/intake/questionnaire';
 import type { IntakeAnswers, RoutingDecision } from '../../../lib/intake/routing';
+import { getScreeningReview } from '../../../lib/screening/review';
+import { weightCheckFromAnswers } from '../../../lib/intake/weight';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -43,6 +45,16 @@ const routing = (intake?.payload.routing as RoutingDecision | undefined) ?? null
 
 const video = getVideo(env, admin);
 const room = ref.room_ref ? await video.getRoom(ref.room_ref) : null;
+
+// Screening (weight lane): the bloods for review + the block signal. Issuing a
+// script is blocked until the results are in; refuse stays available. Mirrors the
+// guard in decideConsultAction so the console never offers an enabled Issue while
+// the decision is blocked.
+const screening = getScreening(env, admin);
+const review = patient
+  ? await getScreeningReview(admin, screening, patient.id)
+  : { required: false, status: null, ready: false, blocked: false, panel: null };
+const weight = weightCheckFromAnswers(intake?.payload.answers as Record<string, unknown> | undefined);
 
 const error = Astro.url.searchParams.get('error');
 const decided = ref.status !== 'booked' || !!ref.decided_at;
@@ -155,6 +167,56 @@ const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
     </div>
 
     {
+      weight && (
+        <div class="card section">
+          <h2>Weight / BMI check</h2>
+          <dl class="picture">
+            <div><dt>BMI (from screening)</dt><dd>{weight.bmi}</dd></div>
+            <div><dt>Related health condition</dt><dd>{weight.hasRelatedCondition ? 'Yes' : 'No'}</dd></div>
+            <div>
+              <dt>Eligibility guide</dt>
+              <dd>
+                <span class={weight.eligibility.eligible ? 'pill' : 'pill pill-soft'}>
+                  {weight.eligibility.eligible ? 'Within guidance' : 'Outside guidance'}
+                </span>{' '}
+                {weight.eligibility.reason}
+              </dd>
+            </div>
+          </dl>
+          <p class="muted decision-copy">Guidance only — a clinician makes the final decision.</p>
+        </div>
+      )
+    }
+
+    {
+      review.required && (
+        <div class="card section">
+          <h2>Screening (bloods)</h2>
+          {
+            review.ready ? (
+              <>
+                <p class="muted">At-home blood test results, read from the screening record for review.</p>
+                <dl class="picture">
+                  {(review.panel ?? []).map((m) => (
+                    <div>
+                      <dt>{m.marker}</dt>
+                      <dd>{m.value ?? '(no value)'} {m.flag && <span class="pill pill-soft">{m.flag}</span>}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </>
+            ) : (
+              <p class="notice notice-soft">
+                Bloods pending (<strong>{review.status}</strong>). Issuing a script is blocked until the
+                screening results are in. You can still refuse.
+              </p>
+            )
+          }
+        </div>
+      )
+    }
+
+    {
       !decided && (
         <div class="card section decision">
           <h2>Decision</h2>
@@ -187,8 +249,20 @@ const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
               </label>
             </fieldset>
 
+            {review.blocked && (
+              <p class="notice notice-soft">
+                Issuing is disabled until the screening bloods are in. Refuse remains available.
+              </p>
+            )}
+
             <div class="actions">
-              <button type="submit" name="action" value="issue" class="btn btn-pri">
+              <button
+                type="submit"
+                name="action"
+                value="issue"
+                class="btn btn-pri"
+                disabled={review.blocked}
+              >
                 Issue script
               </button>
               <button type="submit" name="action" value="refuse" class="btn btn-ghost btn-refuse">
