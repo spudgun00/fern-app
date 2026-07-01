@@ -10,9 +10,10 @@
 // membership state. No method returns card details, a billing address, or PII.
 // The app DB stores provider pointers + status only.
 
-// The two priced things: the one-off consult fee (mode=payment) and the
-// recurring membership (mode=subscription).
-export type CheckoutKind = 'consult' | 'membership';
+// The priced things: the one-off consult fee (menopause full lane) and the
+// recurring membership (both mode=payment / mode=subscription), plus the
+// pay-first weight treatment charge (mode=payment, weight roadmap P4).
+export type CheckoutKind = 'consult' | 'membership' | 'treatment';
 
 export interface CheckoutSession {
   // Opaque provider session id. Persisted app-side as a pointer only.
@@ -51,4 +52,11 @@ export interface PaymentsAdapter {
   ): Promise<CheckoutSession>;
   getCheckoutStatus(sessionId: string): Promise<CheckoutResult>;
   createPortalSession(customerRef: string, returnUrl: string): Promise<PortalSession>;
+  // Refund a completed one-off payment by its checkout-session pointer. Used for
+  // the AUTOMATIC refund-on-refusal on the pay-first weight lane (P4): when a
+  // clinician refuses a POM the patient paid for up front, the charge is returned
+  // instantly, in code, not manually. Idempotent-ish: refunding an already
+  // refunded / unpaid session is the provider's concern; callers gate on a paid
+  // treatment payment_ref before calling.
+  refund(sessionId: string): Promise<void>;
 }

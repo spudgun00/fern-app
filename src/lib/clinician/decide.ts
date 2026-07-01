@@ -12,6 +12,8 @@ import {
 } from '../accounts';
 import type { JourneyState } from '../journey/states';
 import { assertScreeningReadyForDecision } from '../screening/guard';
+import type { PaymentsAdapter } from '../adapters/payments';
+import { refundOnRefusal } from '../weight/refund';
 
 // ===========================================================================
 // P3 — the clinician decision. This is the ONE place a fast-lane intake is
@@ -52,6 +54,9 @@ export interface DecideResult {
   newState: JourneyState;
   noteId: string;
   rxId: string | null;
+  // True when a pay-first treatment charge was automatically refunded on refuse
+  // (weight roadmap P4). Null/false for every non-refunded decision.
+  refunded: boolean;
 }
 
 export class ClinicianDecisionError extends Error {
@@ -75,6 +80,10 @@ export async function decideClinicianAction(
   admin: SupabaseClient,
   core: ClinicalCoreAdapter,
   input: DecideInput,
+  // Optional (weight roadmap P4). When supplied, a REFUSE automatically refunds a
+  // pay-first treatment charge (refund-on-refusal). Omitted by callers/tests that
+  // do not touch the pay-first lane; when omitted, no refund is attempted.
+  payments?: PaymentsAdapter,
 ): Promise<DecideResult> {
   const reason = (input.reason ?? '').trim();
   if (reason === '') {
@@ -119,6 +128,7 @@ export async function decideClinicianAction(
 
   let newState: JourneyState;
   let rxId: string | null = null;
+  let refunded = false;
 
   if (input.action === 'approve') {
     // Screening guard: for a screening-required patient (weight lane), the
@@ -166,6 +176,12 @@ export async function decideClinicianAction(
       decidedBy: input.clinicianAccountId,
       noteRef: noteId,
     });
+    // Refund-on-refusal (weight P4): if this patient paid up front for treatment,
+    // the charge is returned automatically here. No-op for a patient who has not
+    // paid (e.g. the menopause lane). Only runs when a payments adapter is passed.
+    if (payments) {
+      refunded = await refundOnRefusal(admin, payments, patient.id);
+    }
   }
 
   return {
@@ -175,5 +191,6 @@ export async function decideClinicianAction(
     newState,
     noteId,
     rxId,
+    refunded,
   };
 }

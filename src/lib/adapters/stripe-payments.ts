@@ -94,4 +94,17 @@ export class StripePayments implements PaymentsAdapter {
     });
     return { portalUrl: String(json.url) };
   }
+
+  // Refund a completed one-off Checkout by its session id: resolve the session's
+  // payment_intent, then create a full refund against it. Used by the automatic
+  // refund-on-refusal on the pay-first weight lane. (Test mode until go-live; the
+  // exercised path in this build is MockPayments.refund.)
+  async refund(sessionId: string): Promise<void> {
+    const session = await this.call(`/checkout/sessions/${sessionId}`, 'GET');
+    const paymentIntent = session.payment_intent;
+    if (paymentIntent == null) {
+      throw new Error(`StripePayments.refund: session ${sessionId} has no payment_intent`);
+    }
+    await this.call('/refunds', 'POST', { payment_intent: String(paymentIntent) });
+  }
 }

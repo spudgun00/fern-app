@@ -509,7 +509,7 @@ export async function setScreeningRefStatus(
 // those live with the provider (Stripe) behind the PaymentsAdapter. Used here
 // for the one-off consult fee; recurring membership state lives in `membership`.
 // ---------------------------------------------------------------------------
-export type PaymentKind = 'consult' | 'membership';
+export type PaymentKind = 'consult' | 'membership' | 'treatment';
 
 export interface PaymentRef {
   id: string;
@@ -587,6 +587,15 @@ export async function getLatestPendingPaymentRef(
 // P5 surfaces it on the billing page and proves the gate flips on payment.
 export async function hasPaidConsult(db: SupabaseClient, accountId: string): Promise<boolean> {
   const ref = await getLatestPaymentRef(db, accountId, 'consult');
+  return ref?.status === 'paid';
+}
+
+// The pay-first weight gate (P4): a patient has paid up front for treatment once
+// a treatment payment_ref is marked paid. Its counterpart is the automatic
+// refund-on-refusal (src/lib/weight/refund.ts) — the charge is returned in code
+// the moment a clinician refuses, which is what makes pay-first acceptable.
+export async function hasPaidTreatment(db: SupabaseClient, accountId: string): Promise<boolean> {
+  const ref = await getLatestPaymentRef(db, accountId, 'treatment');
   return ref?.status === 'paid';
 }
 

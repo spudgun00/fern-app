@@ -1,0 +1,11 @@
+-- Fern patient zone — weight roadmap P4: pay-first treatment payment kind.
+--
+-- Weight is PAY-FIRST (pay at checkout, before the clinician decision), which is
+-- only acceptable because a refund-on-refusal is automatic and built in (see
+-- src/lib/weight/refund.ts). The one-off treatment charge reuses the P0
+-- payment_ref pointer table (provider pointer + coarse status only), adding one
+-- payment_kind so it is not conflated with the menopause consult fee.
+--
+-- Additive enum value; no table change (mock_payment_session.kind is free text).
+-- No card data, no PII, no clinical content — same hard line as P5.
+alter type payment_kind add value if not exists 'treatment';

@@ -12,6 +12,8 @@ import {
 } from '../accounts';
 import type { JourneyState } from '../journey/states';
 import { assertScreeningReadyForDecision } from '../screening/guard';
+import type { PaymentsAdapter } from '../adapters/payments';
+import { refundOnRefusal } from '../weight/refund';
 
 // ===========================================================================
 // P6 — the full-lane clinician decision. This is the ONE place a booked consult
@@ -58,6 +60,9 @@ export interface ConsultDecideResult {
   newState: JourneyState;
   noteId: string;
   rxId: string | null;
+  // True when a pay-first treatment charge was automatically refunded on refuse
+  // (weight roadmap P4). False for every non-refunded decision.
+  refunded: boolean;
 }
 
 export class ConsultDecisionError extends Error {
@@ -80,6 +85,10 @@ export async function decideConsultAction(
   admin: SupabaseClient,
   core: ClinicalCoreAdapter,
   input: ConsultDecideInput,
+  // Optional (weight roadmap P4). When supplied, a REFUSE automatically refunds a
+  // pay-first treatment charge (refund-on-refusal). Omitted by callers/tests that
+  // do not touch the pay-first lane.
+  payments?: PaymentsAdapter,
 ): Promise<ConsultDecideResult> {
   const reason = (input.reason ?? '').trim();
   if (reason === '') {
@@ -140,6 +149,7 @@ export async function decideConsultAction(
 
   let newState: JourneyState;
   let rxId: string | null = null;
+  let refunded = false;
 
   if (input.action === 'issue') {
     const items = input.rxItems ?? [];
@@ -172,6 +182,12 @@ export async function decideConsultAction(
       decidedBy: input.clinicianAccountId,
       noteRef: noteId,
     });
+    // Refund-on-refusal (weight P4): a pay-first treatment charge is returned
+    // automatically here. No-op when the patient never paid; only runs when a
+    // payments adapter is passed.
+    if (payments) {
+      refunded = await refundOnRefusal(admin, payments, patient.id);
+    }
   }
 
   return {
@@ -181,5 +197,6 @@ export async function decideConsultAction(
     newState,
     noteId,
     rxId,
+    refunded,
   };
 }

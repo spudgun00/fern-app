@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
-import { getClinicalCore, getDispensing, getEmail } from '../../../lib/adapters/factory';
+import { getClinicalCore, getDispensing, getEmail, getPayments } from '../../../lib/adapters/factory';
 import { ensureAccount } from '../../../lib/accounts';
 import { decideClinicianAction, type ClinicianAction } from '../../../lib/clinician/decide';
 import { dispenseIssuedScript } from '../../../lib/dispensing/dispense';
@@ -40,13 +40,20 @@ export const POST: APIRoute = async (ctx) => {
           ]
         : undefined;
 
-    const result = await decideClinicianAction(admin, core, {
-      clinicianAccountId: account.id,
-      queueItemId,
-      action,
-      reason,
-      rxItems,
-    });
+    const result = await decideClinicianAction(
+      admin,
+      core,
+      {
+        clinicianAccountId: account.id,
+        queueItemId,
+        action,
+        reason,
+        rxItems,
+      },
+      // Pay-first weight lane: a refuse auto-refunds the treatment charge (no-op
+      // for a patient who never paid).
+      getPayments(env, admin),
+    );
 
     // On approve the script is issued (decide stops at rx_issued, the clinical
     // decision). P4: the issued script now flows to dispensing (rx_issued ->

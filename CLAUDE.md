@@ -889,6 +889,48 @@ guard's block VISIBLE in the console.
   weight). The BMI CAPTURE form (patient side) lands with the P4 GLP intake lane;
   P3 delivers the verification LOGIC + the console surfacing.
 
+## Weight roadmap P4 done (GLP intake lane + pay-first + automatic refund-on-refusal)
+
+Weight roadmap P4, on P2/P3. Built + proven by `npm test` (135 passed, 126 -> 135;
++9). Not deployed. The pay-first money model, made safe by an automatic refund.
+
+- **GLP intake lane — the contraindication screen** `src/lib/intake/weight-routing.ts`:
+  `routeWeightIntake(answers)` (pure, the weight parallel of `routeIntake`). Absolute
+  contraindications (pregnancy / planning / breastfeeding / eating-disorder history /
+  medullary thyroid cancer or MEN2 / pancreatitis) -> `stop` + a GP signpost. BMI is
+  GUIDANCE not a gate (an out-of-range BMI still proceeds; a clinician decides after
+  screening). `src/lib/weight/submit.ts` `submitWeightIntake` orchestrates it: writes
+  the answers (incl. BMI, Article 9) to the CORE, advances the journey, records the
+  app-DB pointer + outcome, and on `proceed` orders the screening kit
+  (`intake_submitted -> screening_kit_sent`). Nothing here prescribes.
+- **Pay-first + AUTOMATIC refund-on-refusal (the load-bearing piece):** weight is
+  pay-at-checkout, BEFORE the clinician decides — only acceptable because the refund
+  is instant and built in. A new `treatment` payment kind (enum migration
+  `20260701000001_treatment_pay.sql`; reuses the `payment_ref` pointer table),
+  `PaymentsAdapter.refund(sessionId)` (implemented in BOTH `MockPayments` — marks the
+  provider session refunded — and `StripePayments` — resolves the session's
+  payment_intent then POSTs a refund), and `refundOnRefusal` (`src/lib/weight/refund.ts`):
+  on a paid `treatment` payment_ref it refunds the provider session + flips the pointer
+  to `refunded`. **Composed into the refuse branch of BOTH `decideClinicianAction` and
+  `decideConsultAction`** via an OPTIONAL `payments` param (mirrors D5's optional
+  `notify`); the two clinician routes pass `getPayments(...)`, so every real refusal
+  refunds. No `treatment` payment (menopause, or an unpaid weight patient) -> a no-op,
+  so all prior flows/tests are untouched (126 still green). `hasPaidTreatment` gate
+  added; `DecideResult`/`ConsultDecideResult` gain a `refunded` flag.
+- **HARD LINE intact:** money only gates — paying issues no script (a clinician still
+  decides), the rx_issued predecessors are unchanged, and the screening guard still
+  applies (approve needs `results_ready`). Refund is on REFUSE only; approve keeps the
+  charge and reaches rx_issued.
+- **Tests** (`test/weight-lane.test.ts`, 9): the contraindication screen (clean ->
+  proceed; each contraindication -> stop; out-of-range BMI still proceeds), the adapter
+  refund, refund-on-refusal end to end (**pay -> refuse -> auto-refund asserted**;
+  **pay -> approve -> rx_issued, charge kept**; no-op when nothing paid), and
+  `submitWeightIntake` (proceed -> kit ordered; contraindication -> stop, no kit).
+- **Still to come:** P5 unifies screening across menopause + weight (the shared
+  "Midlife Health Screen"). The patient-facing GLP intake + pay-first checkout PAGES
+  are thin wrappers over `submitWeightIntake` + `startCheckout('treatment', ...)`;
+  this phase delivers + proves the orchestration + the refund safety net.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

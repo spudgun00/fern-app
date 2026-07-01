@@ -93,6 +93,25 @@ export class MockPayments implements PaymentsAdapter {
     if (upErr) this.fail('markPaid', upErr.message);
   }
 
+  // Refund a completed one-off payment (the pay-first weight treatment charge).
+  // Part of the PaymentsAdapter interface — this is the automatic refund-on-refusal
+  // path, so it is real behaviour, not a mock-only affordance. Marks the provider
+  // session refunded (a real provider would move the money back to the card).
+  async refund(sessionId: string): Promise<void> {
+    const { data, error } = await this.db
+      .from('mock_payment_session')
+      .select('id,status')
+      .eq('id', sessionId)
+      .maybeSingle();
+    if (error) this.fail('refund', error.message);
+    if (!data) this.fail('refund', `unknown session ${sessionId}`);
+    const { error: upErr } = await this.db
+      .from('mock_payment_session')
+      .update({ status: 'refunded' })
+      .eq('id', sessionId);
+    if (upErr) this.fail('refund', upErr.message);
+  }
+
   // MOCK-ONLY: simulate a cancellation taken in the provider portal. The real
   // Stripe path emits a customer.subscription.deleted webhook instead. Returns
   // the customer ref so the caller can flip the membership state.
