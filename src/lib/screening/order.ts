@@ -20,6 +20,21 @@ import {
 // only once the guard passes). No path auto-approves or auto-issues a script.
 // ===========================================================================
 
+// The menopause front door into the SAME screening subsystem (weight roadmap P5).
+// The Midlife Health Screen is not a separate flow: it is orderScreeningKit under
+// screen-framed copy (see screening/panel.ts MIDLIFE_SCREEN). Both front doors —
+// weight (submitWeightIntake) and menopause (here) — order the same kit, walk the
+// same branch (screening_kit_sent -> sample_received -> results_ready), and hit the
+// same guard before a clinician decides. One screening, two doors.
+export async function startMidlifeScreen(
+  admin: SupabaseClient,
+  screening: ScreeningAdapter,
+  accountId: string,
+  corePatientId: string,
+): Promise<string> {
+  return orderScreeningKit(admin, screening, accountId, corePatientId);
+}
+
 // Order the kit. Precondition: the journey is at intake_submitted (post-intake).
 // intake_submitted -> screening_kit_sent; writes the screening_ref pointer.
 export async function orderScreeningKit(

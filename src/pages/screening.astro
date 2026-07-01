@@ -1,0 +1,105 @@
+---
+// The shared Midlife Health Screen (weight roadmap P5). ONE screening, two front
+// doors: this same page + the same ScreeningAdapter serve the weight lane and the
+// menopause lane. SCREEN-FRAMED, never diagnostic (NICE NG23: menopause in the
+// over-45s is a clinical diagnosis with no bloods). Shows the framing, the shared
+// panel, and — if the patient has an in-flight screen — its status via the same
+// getScreeningReview the clinician console uses.
+import Layout from '../layouts/Layout.astro';
+import { createAdminClient } from '../lib/supabase/admin';
+import { getScreening } from '../lib/adapters/factory';
+import { ensureAccount } from '../lib/accounts';
+import { getScreeningReview } from '../lib/screening/review';
+import { MIDLIFE_SCREEN, SHARED_PANEL } from '../lib/screening/panel';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+
+const screening = getScreening(env, admin);
+const review = await getScreeningReview(admin, screening, account.id);
+
+const MARKER_LABEL: Record<string, string> = {
+  lipids: 'Cholesterol (lipids)',
+  hba1c: 'Blood sugar (HbA1c)',
+  liver: 'Liver function',
+  thyroid: 'Thyroid',
+  fsh: 'Hormone (FSH) — only where clinically indicated',
+  cholesterol: 'Cholesterol (lipids)',
+};
+const label = (m: string) => MARKER_LABEL[m] ?? m;
+---
+
+<Layout title={`${MIDLIFE_SCREEN.title} — Fern`} navVariant="patient" user={user} active="/screening">
+  <div class="wrap screen">
+    <div class="head stack">
+      <span class="eyebrow">Screening</span>
+      <h1>{MIDLIFE_SCREEN.title}</h1>
+      <p class="lede">{MIDLIFE_SCREEN.standfirst}</p>
+    </div>
+
+    <p class="notice notice-info top-notice">{MIDLIFE_SCREEN.disclaimer}</p>
+
+    <div class="card section">
+      <h2>What the screen checks</h2>
+      <p class="muted">{MIDLIFE_SCREEN.panelLabel}</p>
+      <ul class="panel">
+        {SHARED_PANEL.map((m) => <li>{label(m)}</li>)}
+        <li class="muted">{label('fsh')}</li>
+      </ul>
+      <p class="muted small">
+        The same screen sits behind both our weight care and our menopause care — one at-home blood
+        test, reviewed by a clinician, kept as your baseline.
+      </p>
+    </div>
+
+    {
+      review.required && (
+        <div class="card section">
+          <h2>Your screen</h2>
+          {
+            review.ready ? (
+              <>
+                <p class="muted">Your results are in and saved as your baseline.</p>
+                <dl class="picture">
+                  {(review.panel ?? []).map((m) => (
+                    <div>
+                      <dt>{label(m.marker)}</dt>
+                      <dd>{m.value ?? '(no value)'} {m.flag && <span class="pill pill-soft">{m.flag}</span>}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p class="muted small">A clinician reviews these with you. This is a baseline, not a diagnosis.</p>
+              </>
+            ) : (
+              <p class="notice notice-soft">
+                Your kit is on its way / with the lab (<strong>{review.status}</strong>). Your results
+                will appear here once the bloods are in.
+              </p>
+            )
+          }
+        </div>
+      )
+    }
+  </div>
+</Layout>
+
+<style>
+  .screen { max-width: 720px; }
+  .top-notice { margin-top: 22px; }
+  .section { margin-top: 22px; }
+  .section h2 { font-size: 22px; }
+  .panel { margin: 14px 0 0; padding-left: 20px; }
+  .panel li { color: var(--text); font-size: 15px; }
+  .panel li + li { margin-top: 4px; }
+  .small { font-size: 13.5px; margin-top: 14px; }
+  .picture { margin: 4px 0 0; }
+  .picture > div { display: grid; grid-template-columns: 260px 1fr; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border); }
+  .picture > div:first-child { border-top: none; }
+  .picture dt { font-weight: 600; color: var(--navy); font-size: 14.5px; }
+  .picture dd { margin: 0; color: var(--text); }
+  @media (max-width: 560px) { .picture > div { grid-template-columns: 1fr; gap: 4px; } }
+</style>

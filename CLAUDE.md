@@ -931,6 +931,47 @@ Weight roadmap P4, on P2/P3. Built + proven by `npm test` (135 passed, 126 -> 13
   are thin wrappers over `submitWeightIntake` + `startCheckout('treatment', ...)`;
   this phase delivers + proves the orchestration + the refund safety net.
 
+## Weight roadmap P5 done (one screening, two front doors — the Midlife Health Screen)
+
+Weight roadmap P5, on P2-P4. Built + proven by `npm test` (144 passed, 135 -> 144;
++9). Not deployed. Unifies screening across the weight + menopause front doors.
+
+- **Shared subsystem config** `src/lib/screening/panel.ts`: `SHARED_PANEL`
+  (lipids, HbA1c, liver, thyroid) — the single source both doors run; `fshIndicated`
+  (the NICE NG23 rule: FSH ONLY for 40-45 with symptoms, or under-40 suspected POI;
+  NOT in the over-45s, who NG23 diagnoses clinically); `midlifeScreenPanel` (shared
+  panel + conditional FSH); and `MIDLIFE_SCREEN` framing copy.
+- **One flow, two doors:** the menopause "Midlife Health Screen" is NOT a separate
+  flow — `startMidlifeScreen` (`src/lib/screening/order.ts`) is `orderScreeningKit`
+  under screen-framed copy. Both `submitWeightIntake` (weight) and `startMidlifeScreen`
+  (menopause) order the SAME kit, walk the SAME branch (`screening_kit_sent ->
+  sample_received -> results_ready`), and hit the SAME guard before a clinician
+  decides. A test proves the menopause door reaches the identical branch state.
+- **SCREEN-FRAMED, not a diagnosis (hard framing rule):** `MIDLIFE_SCREEN.disclaimer`
+  states "a health screen, not a diagnosis"; a test asserts the framing makes NO
+  claim to diagnose menopause (NICE NG23: over-45 is a clinical diagnosis, no bloods).
+- **Patient page** `src/pages/screening.astro` (navVariant patient): the shared
+  Midlife Health Screen — framing + the screen-not-diagnosis disclaimer + the shared
+  panel + the patient's own screen status (via the same `getScreeningReview` the
+  console uses). Compiles under `astro build`.
+- **Tests** (`test/midlife-screen.test.ts`, 9): the FSH NICE rule across ages/contexts,
+  the panel (shared always present, FSH conditional), the screen-not-diagnosis framing,
+  and the menopause front door entering the identical screening branch.
+
+### Weight roadmap status after P5 (this repo's CC phases)
+
+The CC-owned weight phases are **P2-P5, all done + green (144 tests)**: screening
+adapter + branch + guard (P2), bloods in the console + BMI check (P3), GLP intake
+lane + pay-first + refund-on-refusal (P4), unified Midlife Health Screen (P5). Built
+against mocks, committed locally, NOT pushed/deployed (James pushes + verifies on the
+preview per the roadmap). The remaining roadmap items are NOT CC coding tasks: **P-pw**
+(Cloudflare Access password gate — dashboard) and **P0** (Brevo DOI automation +
+worker — dashboard/API), both James-owned. `weightLossRx` on the marketing site and
+the real clinical core / lab / prescribing go live only on CQC + clinical lead +
+compliance sign-off. Patient-facing PAGES for the weight GLP intake + pay-first
+checkout are thin wrappers over the proven `submitWeightIntake` /
+`startCheckout('treatment', ...)` orchestration and can be styled in a later demo pass.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and
