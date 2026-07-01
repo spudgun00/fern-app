@@ -445,6 +445,64 @@ export async function setDispenseRefStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Screening pointer (weight roadmap P2). screening_ref is a POINTER + coarse
+// status only: which account, a pointer into the screening provider (kit_ref),
+// and a workflow status mirroring the journey (kit_sent -> sample_received ->
+// results_ready). The blood-test RESULTS (panel values) are Article 9 and live
+// ONLY behind the ScreeningAdapter (mock_screening this phase); only the pointer
+// + status are recorded here. No marker values, no ranges, no clinical detail.
+// ---------------------------------------------------------------------------
+export type ScreeningRefStatus = 'kit_sent' | 'sample_received' | 'results_ready';
+
+export interface ScreeningRef {
+  id: string;
+  account_id: string;
+  kit_ref: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function recordScreeningRef(
+  db: SupabaseClient,
+  accountId: string,
+  kitRef: string,
+  status: ScreeningRefStatus = 'kit_sent',
+): Promise<void> {
+  const { error } = await db
+    .from('screening_ref')
+    .insert({ account_id: accountId, kit_ref: kitRef, status });
+  if (error) throw new Error(`recordScreeningRef: ${error.message}`);
+}
+
+export async function getLatestScreeningRef(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<ScreeningRef | null> {
+  const { data, error } = await db
+    .from('screening_ref')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestScreeningRef: ${error.message}`);
+  return (data as ScreeningRef) ?? null;
+}
+
+export async function setScreeningRefStatus(
+  db: SupabaseClient,
+  kitRef: string,
+  status: ScreeningRefStatus,
+): Promise<void> {
+  const { error } = await db
+    .from('screening_ref')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('kit_ref', kitRef);
+  if (error) throw new Error(`setScreeningRefStatus: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
 // Payment pointer (P5). payment_ref (P0 table) records ONLY a pointer into the
 // payments provider (provider_ref = the Checkout session / payment id), the kind
 // (consult one-off vs membership), and a coarse status. NO card data, NO PII;

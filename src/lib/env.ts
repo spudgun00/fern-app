@@ -16,6 +16,7 @@ export interface AppEnv {
   BOOKING_IMPL: string;
   VIDEO_IMPL: string;
   EMAIL_IMPL: string;
+  SCREENING_IMPL: string;
   // Stripe Identity (test mode in P1). Required ONLY when IDENTITY_IMPL=stripe;
   // server-only, never PUBLIC_, never in a client bundle.
   STRIPE_SECRET_KEY?: string;
@@ -90,6 +91,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const emailImpl = String(get('EMAIL_IMPL') ?? 'mock');
   const resendApiKey = get('RESEND_API_KEY');
   const emailFrom = get('EMAIL_FROM');
+  const screeningImpl = String(get('SCREENING_IMPL') ?? 'mock');
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
   // keeping them out of REQUIRED lets mock dev + tests run without them.
@@ -173,5 +175,6 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     EMAIL_IMPL: emailImpl,
     RESEND_API_KEY: resendApiKey != null ? String(resendApiKey) : undefined,
     EMAIL_FROM: emailFrom != null ? String(emailFrom) : DEFAULT_EMAIL_FROM,
+    SCREENING_IMPL: screeningImpl,
   };
 }

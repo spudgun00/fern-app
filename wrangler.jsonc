@@ -23,6 +23,8 @@
   // are set as secrets. EMAIL_IMPL selects the EmailAdapter (D5); flip to "resend"
   // once RESEND_API_KEY is set as a secret (EMAIL_FROM defaults to a verified
   // mail.fern.care sender). Leave "mock" to log emails server-side with no keys.
+  // SCREENING_IMPL selects the ScreeningAdapter (weight P2, at-home blood test);
+  // "mock" persists a fake panel to mock_screening. The real UKAS lab slots in later.
   "vars": {
     "CORE_IMPL": "mock",
     "DISPENSING_IMPL": "mock",
@@ -30,6 +32,7 @@
     "PAYMENTS_IMPL": "mock",
     "BOOKING_IMPL": "mock",
     "VIDEO_IMPL": "mock",
-    "EMAIL_IMPL": "mock"
+    "EMAIL_IMPL": "mock",
+    "SCREENING_IMPL": "mock"
   }
 }

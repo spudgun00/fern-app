@@ -5,11 +5,13 @@ import {
   getAccountById,
   getBookingRefById,
   getJourney,
+  getLatestScreeningRef,
   recordConsultDecision,
   type Account,
   type BookingRef,
 } from '../accounts';
 import type { JourneyState } from '../journey/states';
+import { assertScreeningReadyForDecision } from '../screening/guard';
 
 // ===========================================================================
 // P6 — the full-lane clinician decision. This is the ONE place a booked consult
@@ -110,6 +112,15 @@ export async function decideConsultAction(
     throw new ConsultDecisionError(
       `consult: patient is not at a booked consult (state ${journey?.state ?? 'none'})`,
     );
+  }
+
+  // Screening guard: for a screening-required patient (weight lane), the ISSUE
+  // (prescribing) decision is blocked until the bloods are in (results_ready).
+  // Checked BEFORE any state change so a blocked issue moves nothing. No
+  // screening_ref -> no-op. Refuse is never gated (a clinician can always decline).
+  if (input.action === 'issue') {
+    const screening = await getLatestScreeningRef(admin, patient.id);
+    assertScreeningReadyForDecision(screening);
   }
 
   // The consult has taken place: advance consult_booked -> consult_done (the

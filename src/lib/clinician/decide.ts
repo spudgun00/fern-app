@@ -4,12 +4,14 @@ import {
   advanceJourney,
   getAccountById,
   getJourney,
+  getLatestScreeningRef,
   getQueueItemById,
   recordQueueDecision,
   type Account,
   type QueueItem,
 } from '../accounts';
 import type { JourneyState } from '../journey/states';
+import { assertScreeningReadyForDecision } from '../screening/guard';
 
 // ===========================================================================
 // P3 — the clinician decision. This is the ONE place a fast-lane intake is
@@ -119,6 +121,12 @@ export async function decideClinicianAction(
   let rxId: string | null = null;
 
   if (input.action === 'approve') {
+    // Screening guard: for a screening-required patient (weight lane), the
+    // prescribing decision is blocked until the bloods are in (results_ready).
+    // No screening_ref (menopause fast lane) -> no-op. Escalate / refuse below
+    // are never gated: a clinician can always route on or decline.
+    const screening = await getLatestScreeningRef(admin, patient.id);
+    assertScreeningReadyForDecision(screening);
     const items = input.rxItems ?? [];
     if (items.length === 0) {
       throw new ClinicianDecisionError('decide: approve requires at least one prescription item');

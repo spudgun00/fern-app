@@ -13,8 +13,18 @@ export const ALLOWED_TRANSITIONS: Record<JourneyState, readonly JourneyState[]> 
   id_pending: ['id_verified'],
   id_verified: ['intake_started'],
   intake_started: ['intake_submitted'],
-  // Routing fork: fast lane -> queue; full lane -> consult.
-  intake_submitted: ['in_review_queue', 'consult_booked'],
+  // Routing fork: fast lane -> queue; full lane -> consult. A screening-required
+  // (weight) patient instead branches into the screening lane (screening_kit_sent),
+  // and only rejoins the decision path once the bloods are in (results_ready ->
+  // in_review_queue / consult_booked). The direct menopause forks stay.
+  intake_submitted: ['in_review_queue', 'consult_booked', 'screening_kit_sent'],
+  // Screening branch: kit sent -> sample received -> results ready. results_ready
+  // rejoins the SAME two decision entry points, now with bloods attached. No state
+  // here can reach rx_issued; the clinician decision still happens at
+  // approved / consult_done exactly as before.
+  screening_kit_sent: ['sample_received'],
+  sample_received: ['results_ready'],
+  results_ready: ['in_review_queue', 'consult_booked'],
   in_review_queue: ['approved', 'escalated', 'refused'],
   approved: ['rx_issued'], // clinician decision -> script (one of two allowed entries to rx_issued)
   escalated: ['consult_booked'], // re-route a fast-lane patient into the full lane

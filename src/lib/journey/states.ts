@@ -6,6 +6,13 @@ export const JOURNEY_STATES = [
   'id_verified',
   'intake_started',
   'intake_submitted',
+  // Screening branch (weight roadmap P2): a screening-required patient's at-home
+  // blood test sits between intake_submitted and the clinician decision. These
+  // are additive; the menopause paths (intake_submitted -> in_review_queue /
+  // consult_booked directly) are unchanged, and rx_issued's predecessors are not.
+  'screening_kit_sent',
+  'sample_received',
+  'results_ready',
   'in_review_queue',
   'approved',
   'escalated',

@@ -797,6 +797,61 @@ None is a code bug; all survive to go-live and must be settled before real care.
    (welcome/consult-booked/script-shipped) delivered from `noreply@mail.fern.care` to the test
    inbox (not spam), Fern HTML intact, no clinical content; flags then returned to `mock`.
 
+## Weight roadmap P2 done (screening before prescribing — adapter + states + guard)
+
+Source of truth: `../fern/docs/fern-weight-roadmap.md` (the weight programme). This
+is that roadmap's **P2** (a separate axis from this repo's P0-P6 / D1-D7; named
+`screening`, not `p2`, to avoid clashing with the existing P2 intake). Built +
+proven by `npm test` locally (117 passed, 103 -> 117; +14). Not deployed — James
+pushes/verifies, per the roadmap.
+
+- **New adapter (same spine + `*_IMPL` pattern as the other eight):**
+  `ScreeningAdapter` (`orderKit`, `getKitStatus`, `getResults`) in
+  `src/lib/adapters/screening.ts` + `MockScreening` (Supabase `mock_screening`,
+  with a mock-only `advanceKit` affordance mirroring `MockDispensing.advanceStatus`)
+  behind `getScreening()` / `SCREENING_IMPL` (default `mock`, added to `env.ts`,
+  `factory.ts`, `wrangler.jsonc`). The blood-test RESULTS (panel values) are
+  Article 9 and live ONLY behind the adapter; the app DB holds a pointer + status.
+- **New journey branch (additive, machine stays otherwise spec-exact):** three
+  states `screening_kit_sent -> sample_received -> results_ready` inserted after
+  `intake_submitted` (enum extended by migration `20260701000000_screening.sql`,
+  applied to the remote dev DB). `intake_submitted` now also forks to
+  `screening_kit_sent`; `results_ready` rejoins the SAME two decision entry points
+  (`in_review_queue` / `consult_booked`) with bloods attached. The direct
+  (non-screening) menopause forks are unchanged.
+- **THE GUARD (`src/lib/screening/guard.ts`):** a SECOND, independent lock, distinct
+  from the rx_issued hard line. For a screening-REQUIRED patient (one with a
+  `screening_ref`), a PRESCRIBING decision — fast-lane `approve` or full-lane
+  `issue` — is blocked (`ScreeningNotReadyError`) until `screening_ref.status ===
+  'results_ready'`. Wired into both `decideClinicianAction` (approve branch) and
+  `decideConsultAction` (issue branch, checked before any state change). Refuse /
+  escalate are NEVER gated (a clinician can always decline or route on). No
+  `screening_ref` (menopause fast lane) -> the guard is a no-op, so every existing
+  flow is untouched (all 103 prior tests still green).
+- **`RX_ISSUED_PREDECESSORS` is UNCHANGED** (still exactly `{approved,
+  consult_done}`); the guard gates WHEN the decision may be taken, the machine gates
+  what rx_issued's predecessors are. Both are asserted by tests.
+- **Boundary:** app-DB `screening_ref` (migration) is POINTERS + coarse status ONLY
+  (`kit_ref`, `status`); a denylist test asserts the column set never grows to
+  marker values / ranges / clinical detail. `mock_screening` is the throwaway lab
+  stand-in (fake clinical-shaped panel), deleted when the real UKAS lab is wired.
+- **Orchestration** `src/lib/screening/order.ts`: `orderScreeningKit` /
+  `receiveScreeningSample` / `attachScreeningResults` / `routeScreenedToReview`
+  drive the branch (adapter call + legal journey advance + pointer status), landing
+  at `in_review_queue` with a fast-lane `queue_item`. Nothing here auto-approves or
+  auto-issues.
+- **Tests** (`test/screening.test.ts`, 14): pure machine (branch legal + rx_issued
+  hard line intact + screening states can't reach a decision/rx_issued), pure guard
+  (null=allowed / pending=blocked / ready=allowed), adapter round-trip via the
+  factory flag, the full orchestration walk, the guard blocking a REAL
+  `decideClinicianAction` (approve blocked at kit_sent, refuse never gated, approve
+  -> rx_issued once results_ready), and the `screening_ref` denylist.
+- **Still to come (later weight phases):** P3 surfaces the bloods in the clinician
+  review queue + consult console (decision visibly blocked until results present);
+  P4 the GLP intake lane + pay-first checkout + automatic refund-on-refusal; P5
+  unifies screening across menopause + weight. Real lab + real prescribing go live
+  only on CQC + clinical lead + compliance sign-off.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

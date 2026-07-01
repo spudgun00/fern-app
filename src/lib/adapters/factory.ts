@@ -20,6 +20,8 @@ import { DailyVideo } from './daily-video';
 import type { EmailAdapter } from './email';
 import { MockEmail } from './mock-email';
 import { ResendEmail } from './resend-email';
+import type { ScreeningAdapter } from './screening';
+import { MockScreening } from './mock-screening';
 
 // Selects the implementation purely from the env flag. The rest of the app
 // (routes, harness, tests) only ever talks to the interface, so swapping the
@@ -99,5 +101,16 @@ export function getEmail(env: AppEnv, _db?: SupabaseClient): EmailAdapter {
     case 'mock':
     default:
       return new MockEmail();
+  }
+}
+
+// Screening (at-home blood test) — the weight lane's front door. Mock persists a
+// clinical-shaped panel to the namespaced mock_screening table; the real lab
+// partner slots in behind the same interface with zero call-site edits.
+export function getScreening(env: AppEnv, db: SupabaseClient): ScreeningAdapter {
+  switch (env.SCREENING_IMPL) {
+    case 'mock':
+    default:
+      return new MockScreening(db);
   }
 }
