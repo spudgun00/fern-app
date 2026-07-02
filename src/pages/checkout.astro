@@ -83,7 +83,14 @@ const paidHref =
           <p class="unlocks">{product.unlocks}</p>
 
           {product.pendingTreatmentNote && (
-            <p class="notice notice-soft pending-note">{product.pendingTreatmentNote}</p>
+            flags.menopauseRx ? (
+              <p class="notice notice-soft pending-note">
+                Your treatment options are chosen after a clinician reviews your
+                screen. Nothing is chosen or charged here.
+              </p>
+            ) : (
+              <p class="notice notice-soft pending-note">{product.pendingTreatmentNote}</p>
+            )
           )}
 
           {checkoutState?.paid ? (

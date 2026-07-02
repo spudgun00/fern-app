@@ -1,0 +1,218 @@
+---
+// Checkout C6 — the menopause treatment step (Journey A's post-approval step,
+// the C2 placeholder wired to the real catalogue). Three render modes, decided by
+// treatmentStepMode:
+//   * menopauseRx OFF -> the labelled C6 placeholder (default; NO HRT name renders).
+//   * flag on, screen not yet reviewed -> a plain "not yet" note.
+//   * flag on + eligible -> the contraindication screen + the HRT catalogue.
+//
+// HARD LINE: choosing a treatment posts a PREFERENCE (/api/treatment/select) that
+// never advances the journey. A clinician still issues every script.
+import Layout from '../../layouts/Layout.astro';
+import { createAdminClient } from '../../lib/supabase/admin';
+import { ensureAccount, getJourney } from '../../lib/accounts';
+import { flagsFromEnv } from '../../lib/cta';
+import { getMenopauseCatalogue } from '../../lib/menopause/catalogue';
+import { treatmentStepMode, TREATMENT_STEP_PLACEHOLDER } from '../../lib/menopause/treatment';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+if (!account.core_patient_id) return Astro.redirect('/account/profile');
+
+const flags = flagsFromEnv(env);
+const journey = await getJourney(admin, account.id);
+const mode = treatmentStepMode(flags, journey?.state);
+const catalogue = mode === 'catalogue' ? getMenopauseCatalogue(flags) : [];
+
+const error = Astro.url.searchParams.get('error');
+const notice = Astro.url.searchParams.get('notice');
+
+// The absolute / strong contraindications, matched to the pure screen
+// (routeMenopauseTreatment). Patient-facing labels; the field names are the
+// answer flags the API reads.
+const CONTRAINDICATIONS: Array<{ name: string; label: string }> = [
+  { name: 'currentOrPastBreastCancer', label: 'Current or past breast cancer' },
+  { name: 'oestrogenDependentCancer', label: 'Another cancer that depends on oestrogen' },
+  { name: 'activeVte', label: 'A recent blood clot in a vein (DVT or PE)' },
+  { name: 'activeArterialDisease', label: 'A recent heart attack, angina or stroke' },
+  { name: 'activeLiverDisease', label: 'Active liver disease' },
+  { name: 'undiagnosedVaginalBleeding', label: 'Vaginal bleeding that has not been checked by a doctor' },
+  { name: 'pregnancy', label: 'You may be pregnant' },
+];
+---
+
+<Layout title="Your treatment options — Fern" navVariant="patient" user={user} active="/treatment" narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Your care</span>
+      <h1>Your treatment options</h1>
+    </div>
+
+    {error && <p class="notice notice-error top-notice">{error}</p>}
+    {notice && <p class="notice notice-info top-notice">{notice}</p>}
+
+    {mode === 'placeholder' && (
+      <div class="card step-card stack top-notice">
+        <span class="pill pill-soft">Coming soon</span>
+        <p class="muted">{TREATMENT_STEP_PLACEHOLDER}</p>
+        <a href="/treatment" class="link">Back to your treatment</a>
+      </div>
+    )}
+
+    {mode === 'not-eligible' && (
+      <div class="card step-card stack top-notice">
+        <span class="pill pill-soft">Not yet</span>
+        <p class="muted">
+          Your treatment options will appear here once a clinician has reviewed
+          your health screen. There is nothing to do yet.
+        </p>
+        <a href="/screening" class="link">Track your screening</a>
+      </div>
+    )}
+
+    {mode === 'catalogue' && (
+      <>
+        <p class="lede top-notice">
+          A clinician has reviewed your screen. You can tell us which type of
+          treatment you would prefer. This is not a prescription: a clinician makes
+          the final decision on what is right and safe for you, and sets the exact
+          product and dose.
+        </p>
+
+        <form method="POST" action="/api/treatment/select" class="choose-form">
+          <div class="card ci-card">
+            <h2>First, a safety check</h2>
+            <p class="muted">
+              Please confirm whether any of these apply to you. If one does, we
+              cannot start this treatment online and will signpost you to your GP.
+            </p>
+            <ul class="ci-list">
+              {CONTRAINDICATIONS.map((c) => (
+                <li>
+                  <label class="ci-row">
+                    <input type="checkbox" name={c.name} />
+                    <span>{c.label}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <label class="ci-row uterus-row">
+              <input type="checkbox" name="hasUterus" checked />
+              <span>I still have my womb (uterus)</span>
+            </label>
+          </div>
+
+          <h2 class="cat-h">Treatment types</h2>
+          <p class="muted cat-sub">
+            These are the categories of menopause treatment. Your clinician confirms
+            the exact product, strength and regimen.
+          </p>
+
+          {catalogue.map((group) => (
+            <section class="cat-group">
+              <div class="cat-head">
+                <h3>{group.category.title}</h3>
+                <p class="cat-blurb">{group.category.blurb}</p>
+              </div>
+              <div class="prod-grid">
+                {group.products.map((p) => (
+                  <label class="prod-tile">
+                    <input type="radio" name="selectedProductId" value={p.id} />
+                    <span class="prod-body">
+                      <span class="prod-name">{p.patientName}</span>
+                      <span class="prod-desc">{p.patientDescription}</span>
+                      {p.specialistOnly && (
+                        <span class="prod-flag">Specialist-initiated</span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          ))}
+
+          <div class="card consent-card">
+            <label class="consent">
+              <input type="checkbox" name="consent" required />
+              <span>
+                I understand this records my preference for my clinician and that
+                nothing is prescribed here. A clinician makes the final decision.
+              </span>
+            </label>
+            <button type="submit" class="btn btn-pri">Record my preference</button>
+          </div>
+        </form>
+
+        <p class="soft devline">
+          <span class="dev-tag">Demo detail</span>
+          state <code>{journey?.state}</code> &middot; menopauseRx <code>on</code>
+        </p>
+      </>
+    )}
+  </div>
+</Layout>
+
+<style>
+  .top-notice { margin-top: 24px; }
+  .step-card .link { align-self: flex-start; }
+  .lede { color: var(--muted); font-size: 15px; line-height: 1.7; }
+
+  .ci-card { margin-top: 20px; }
+  .ci-card h2 { font-size: 20px; }
+  .ci-card .muted { margin-top: 8px; }
+  .ci-list { list-style: none; margin: 14px 0 0; padding: 0; }
+  .ci-list li + li { margin-top: 4px; }
+  .ci-row {
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 14.5px; color: var(--text); line-height: 1.6;
+    padding: 8px 10px; border-radius: 10px;
+  }
+  .ci-row:hover { background: var(--cream-2); }
+  .ci-row input { margin-top: 3px; }
+  .uterus-row { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 14px; }
+
+  .cat-h { font-size: 22px; margin-top: 32px; }
+  .cat-sub { margin-top: 6px; }
+  .cat-group { margin-top: 24px; }
+  .cat-head h3 { font-size: 17px; color: var(--navy); }
+  .cat-blurb { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+  .prod-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px; margin-top: 14px;
+  }
+  .prod-tile {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 14px; background: var(--cream); border: 1px solid var(--border);
+    border-radius: 14px; cursor: pointer; transition: border-color 120ms ease;
+  }
+  .prod-tile:hover { border-color: var(--peri); }
+  .prod-tile:has(input:checked) { border-color: var(--navy); box-shadow: inset 0 0 0 1px var(--navy); }
+  .prod-tile input { margin-top: 3px; }
+  .prod-body { display: flex; flex-direction: column; gap: 4px; }
+  .prod-name { font-weight: 600; color: var(--navy); font-size: 15px; }
+  .prod-desc { color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+  .prod-flag {
+    align-self: flex-start; margin-top: 4px; font-size: 11px;
+    font-family: var(--mono); letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--soft); background: var(--cream-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 2px 8px;
+  }
+
+  .consent-card { margin-top: 28px; }
+  .consent { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+  .consent input { margin-top: 3px; }
+  .consent-card .btn { margin-top: 16px; }
+
+  .devline { margin-top: 22px; font-size: 12.5px; }
+  .dev-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--faint); margin-right: 8px;
+  }
+  code { font-family: var(--mono); font-size: 12.5px; }
+  h2 { font-size: 22px; }
+</style>

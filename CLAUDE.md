@@ -1229,6 +1229,76 @@ the Stripe Billing path is test-mode-ready, proven-by-mock like every money phas
   C2 Journey-A placeholder points at) remain. Real Stripe + real clinical core go live
   only on CQC + clinical lead + compliance sign-off.
 
+## Checkout C6 done (menopause HRT treatment layer — catalogue + treatment intake, behind menopauseRx)
+
+Checkout roadmap C6 (spec `../fern/docs/fern-checkout-build-spec.md` phase C6 + s5 A).
+Built + proven by `npm test` (191 passed, 178 → 191; +13 C6 tests, +1 updated C1
+assertion) + a **render walk both flag states** on the dev server. NOT deployed. NO
+Stripe change (medication payment is C5); this is the HRT equivalent of the weight
+drug layer — the products the Journey-A placeholder pointed at.
+
+- **The flag: `MENOPAUSE_RX_ENABLED` (env.ts), OFF by default**, the exact mirror of
+  the marketing site's `weightLossRx`. Added to `AppEnv` + `readEnv` (`boolFlag`, defaults
+  false) and to `CtaFlags`/`flagsFromEnv` as `menopauseRx`. `.dev.vars` ships it `=false`;
+  James flips it true on the password-gated preview. It gates the HRT catalogue + the
+  treatment step ONLY — it changes NO entry CTA (the menopause door already resolves via
+  `purchaseEnabled`). Same structural POM-safety as weightLossRx: **the build must never
+  render an HRT product name unless this is explicitly true.**
+- **The HRT catalogue — `src/lib/menopause/catalogue.ts`.** The prescribable menopause
+  products as STRUCTURED DATA (NICE NG23 / BMS categories): systemic oestrogen (patch /
+  gel / spray / oral), progestogen (micronised progesterone / LNG-IUS), combined (patch /
+  tablet), vaginal (local) oestrogen, testosterone (specialist-initiated, off-label). Each
+  product carries a **CLINICIAN-facing `clinicianName`** (precise, e.g. "Transdermal
+  estradiol patch") and **PATIENT-facing `patientName` + `patientDescription`** as SEPARATE
+  fields (the console shows the clinician name; the patient sees plain copy — the render
+  walk confirmed the precise clinician names never leak onto the patient page). Plus route /
+  form / endometrial-protection guidance. `getMenopauseCatalogue(flags)` returns `[]` and
+  `getMenopauseProduct(id, flags)` returns `null` when the flag is off, so **no HRT name is
+  produced anywhere while off**. A clinician still sets the exact product/dose/regimen; this
+  is a catalogue of TYPES, not a prescription.
+- **The treatment intake — `src/lib/menopause/treatment-intake.ts`.** `routeMenopauseTreatment`,
+  the pure/deterministic contraindication + selection screen, the parallel of
+  `routeWeightIntake` (the GLP contraindication screen). Runs AFTER screen approval, BEFORE a
+  product is chosen: screens the NICE/BMS absolute contraindications to systemic HRT (current/
+  past breast cancer, oestrogen-dependent cancer, active/recent VTE, active arterial disease,
+  active liver disease, undiagnosed vaginal bleeding, pregnancy) → a hit STOPS with a GP/
+  specialist signpost; otherwise `proceed`, with a validated selection (only a known catalogue
+  id is accepted) and a clinician `needsProgestogenNote` when the patient has a uterus. Fully
+  unit-tested; answers + selection are Article 9 and go to the core, never the app DB.
+- **The wired treatment step — `src/pages/treatment/choose.astro` (the C2 placeholder, now
+  real).** `treatmentStepMode(flags, state)` (in `src/lib/menopause/treatment.ts`) decides:
+  `placeholder` (flag OFF — the labelled C6 placeholder stays, at every state),
+  `not-eligible` (flag on, screen not yet reviewed → a plain "not yet" note), or `catalogue`
+  (flag on + post-approval → the contraindication safety check + the grouped catalogue +
+  radio selection). The checkout screen-purchase note (`products.ts` `pendingTreatmentNote`)
+  is now flag-aware in `checkout.astro` too. Fern design system (`.card`/`.pill`/`.btn`/
+  `.prod-tile` on the site tokens).
+- **THE HARD LINE — choosing a treatment issues nothing.** `submitMenopauseTreatment`
+  (`treatment.ts`) writes the answers + selection to the CORE and **NEVER calls the journey
+  machine** — it returns `stateBefore`/`stateAfter`, identical by construction. The
+  `/api/treatment/select` route is patient-only and a hard no-op unless `menopauseRx` is on.
+  `RX_ISSUED_PREDECESSORS` stays `['approved','consult_done']`; the 3 hard-line tests are
+  **unchanged and green**. A clinician still writes every script; selecting is a preference.
+- **Proven (`test/c6-menopause.test.ts`, 13):** flag OFF → catalogue `[]`, every
+  `getMenopauseProduct` null, no HRT term in any off-output, `treatmentStepMode` → placeholder
+  at every state, and a valid id passed with the flag off records NO selection; flag ON →
+  the 5 category groups resolve, `clinicianName` ≠ `patientName`/`patientDescription` for
+  every product, `treatmentStepMode` gates on approval; the contraindication screen proceeds/
+  stops correctly and only accepts a known id; and **the hard line** — a selection after
+  `approved` records a `menopause_treatment` preference in the core but leaves the journey at
+  `approved` (`stateBefore === stateAfter`), with `rx_issued` predecessors unchanged.
+- **Render walk (RENDER not dist grep — app is `output: 'server'`):** dev server, throwaway
+  signup, scenario to populate the core patient, journey set to `approved`. **OFF** →
+  `/treatment/choose` 200, shows "pending menopause catalogue (phase C6)", **zero** HRT terms
+  in the HTML. **ON** (`.dev.vars` flipped, restart) → catalogue renders (all 5 category
+  headings + patient-facing names + the safety check), placeholder absent, and the precise
+  clinician-facing names do NOT appear on the patient page. `.dev.vars` reverted to `false`;
+  `astro build` clean.
+- **Checkout roadmap after C6:** C1–C4 + C6 done + green (191 tests). **C5** (medication
+  payment F + add-ons G) remains — the only checkout phase left. Real drug strings render
+  only behind `menopauseRx`/`weightLossRx`; real Stripe + real clinical core go live only on
+  CQC + clinical lead + compliance sign-off.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

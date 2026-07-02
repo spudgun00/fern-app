@@ -14,6 +14,11 @@ import type { AppEnv } from './env';
 export interface CtaFlags {
   purchaseEnabled: boolean;
   weightLossRx: boolean;
+  // C6: the menopause HRT treatment layer. OFF by default; mirrors weightLossRx
+  // for the menopause door. Gates the HRT catalogue + treatment step ONLY; it
+  // does not change any entry CTA (the menopause door already resolves via
+  // purchaseEnabled). No HRT name renders anywhere while it is off.
+  menopauseRx: boolean;
   waitlistUrl: string;
 }
 
@@ -40,11 +45,15 @@ const PURCHASE_LABEL: Record<FrontDoor, string> = {
 };
 
 export function flagsFromEnv(
-  env: Pick<AppEnv, 'PURCHASE_ENABLED' | 'WEIGHTLOSS_RX_ENABLED' | 'WAITLIST_URL'>,
+  env: Pick<
+    AppEnv,
+    'PURCHASE_ENABLED' | 'WEIGHTLOSS_RX_ENABLED' | 'MENOPAUSE_RX_ENABLED' | 'WAITLIST_URL'
+  >,
 ): CtaFlags {
   return {
     purchaseEnabled: env.PURCHASE_ENABLED,
     weightLossRx: env.WEIGHTLOSS_RX_ENABLED,
+    menopauseRx: env.MENOPAUSE_RX_ENABLED,
     waitlistUrl: env.WAITLIST_URL,
   };
 }

@@ -55,6 +55,15 @@ export interface AppEnv {
   // "Get early access" CTA routes (the marketing-site waitlist). Non-secret vars.
   PURCHASE_ENABLED: boolean;
   WEIGHTLOSS_RX_ENABLED: boolean;
+  // Checkout C6 — the menopause HRT treatment layer switch. MENOPAUSE_RX_ENABLED
+  // is OFF by default (pre-CQC), the exact mirror of WEIGHTLOSS_RX_ENABLED for the
+  // menopause door: with it OFF the HRT catalogue does not resolve and NO HRT
+  // product name / type renders anywhere (the Journey-A treatment step shows the
+  // labelled C6 placeholder instead). Flip it on (post CQC + clinical lead +
+  // compliance sign-off) and the treatment step renders the real catalogue +
+  // contraindication intake. It never weakens the hard line: choosing a treatment
+  // is a preference only; a clinician still issues every script. Non-secret var.
+  MENOPAUSE_RX_ENABLED: boolean;
   WAITLIST_URL: string;
   // Checkout C3 — the GLP initiation routing switch. Whether a weight (GLP)
   // patient whose screening is in must have a 1:1 CONSULT to initiate treatment
@@ -113,6 +122,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const boolFlag = (v: unknown) => String(v ?? '').toLowerCase() === 'true';
   const purchaseEnabled = boolFlag(get('PURCHASE_ENABLED'));
   const weightLossRx = boolFlag(get('WEIGHTLOSS_RX_ENABLED'));
+  const menopauseRx = boolFlag(get('MENOPAUSE_RX_ENABLED'));
   const glpConsultRequired = boolFlag(get('GLP_CONSULT_REQUIRED'));
   const waitlistUrl = get('WAITLIST_URL');
 
@@ -201,6 +211,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     SCREENING_IMPL: screeningImpl,
     PURCHASE_ENABLED: purchaseEnabled,
     WEIGHTLOSS_RX_ENABLED: weightLossRx,
+    MENOPAUSE_RX_ENABLED: menopauseRx,
     WAITLIST_URL: waitlistUrl != null && String(waitlistUrl) ? String(waitlistUrl) : DEFAULT_WAITLIST_URL,
     GLP_CONSULT_REQUIRED: glpConsultRequired,
   };

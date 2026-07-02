@@ -97,6 +97,8 @@ describe('C1 flag parsing (readEnv)', () => {
     expect(flagsFromEnv(env)).toEqual({
       purchaseEnabled: true,
       weightLossRx: true,
+      // C6 added menopauseRx to the flag bag; unset here -> false (default off).
+      menopauseRx: false,
       waitlistUrl: WAITLIST_URL,
     });
   });
