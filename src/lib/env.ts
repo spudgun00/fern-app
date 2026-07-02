@@ -56,6 +56,13 @@ export interface AppEnv {
   PURCHASE_ENABLED: boolean;
   WEIGHTLOSS_RX_ENABLED: boolean;
   WAITLIST_URL: string;
+  // Checkout C3 — the GLP initiation routing switch. Whether a weight (GLP)
+  // patient whose screening is in must have a 1:1 CONSULT to initiate treatment
+  // (true), or may be initiated ASYNC on a clinician's sign-off of the bloods
+  // (false, the default base tier). A compliance-pass decision, kept as a flag so
+  // it flips WITHOUT a rewrite. It never weakens the hard line: either way a
+  // clinician makes the prescribing decision. Non-secret var, default OFF (async).
+  GLP_CONSULT_REQUIRED: boolean;
 }
 
 const DEFAULT_EMAIL_FROM = 'Fern <noreply@mail.fern.care>';
@@ -106,6 +113,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const boolFlag = (v: unknown) => String(v ?? '').toLowerCase() === 'true';
   const purchaseEnabled = boolFlag(get('PURCHASE_ENABLED'));
   const weightLossRx = boolFlag(get('WEIGHTLOSS_RX_ENABLED'));
+  const glpConsultRequired = boolFlag(get('GLP_CONSULT_REQUIRED'));
   const waitlistUrl = get('WAITLIST_URL');
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
@@ -194,5 +202,6 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     PURCHASE_ENABLED: purchaseEnabled,
     WEIGHTLOSS_RX_ENABLED: weightLossRx,
     WAITLIST_URL: waitlistUrl != null && String(waitlistUrl) ? String(waitlistUrl) : DEFAULT_WAITLIST_URL,
+    GLP_CONSULT_REQUIRED: glpConsultRequired,
   };
 }

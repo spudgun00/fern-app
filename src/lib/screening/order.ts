@@ -5,9 +5,11 @@ import {
   getJourney,
   insertFastQueueItem,
   recordScreeningRef,
+  setJourney,
   setScreeningRefStatus,
   type ScreeningRefStatus,
 } from '../accounts';
+import type { GlpInitiationRoute } from '../weight/glp-routing';
 
 // ===========================================================================
 // Screening orchestration (weight roadmap P2). The single place the at-home
@@ -88,6 +90,44 @@ export async function routeScreenedToReview(
   }
   await advanceJourney(admin, accountId, 'in_review_queue', 'fast');
   return insertFastQueueItem(admin, accountId, intakeId);
+}
+
+// C3 — the consult branch of the GLP initiation switch. A screened weight patient
+// whose bloods are in is routed to the ASSESSED lane instead of the async queue:
+// the journey stays at results_ready with lane 'full', so the patient then pays
+// the consult fee (Journey C) and books (results_ready -> consult_booked). No
+// queue_item is created (this is not an async review). Nothing here prescribes.
+export async function routeScreenedToConsult(
+  admin: SupabaseClient,
+  accountId: string,
+): Promise<void> {
+  const journey = await getJourney(admin, accountId);
+  if (journey?.state !== 'results_ready') {
+    throw new Error(
+      `routeScreenedToConsult: patient bloods are not in (state ${journey?.state ?? 'none'})`,
+    );
+  }
+  // Mark the assessed lane; the state stays results_ready until a slot is booked.
+  await setJourney(admin, accountId, 'results_ready', 'full');
+}
+
+// C3 — the GLP initiation routing switch, applied. Given the route chosen by
+// glpInitiationRoute (async | consult), send a screened patient down the async
+// review queue OR the assessed consult lane, WITHOUT a rewrite: one dispatcher,
+// the same two legal machine edges out of results_ready. The async default is the
+// existing behaviour, unchanged. Either lane still ends at a clinician decision.
+export async function routeScreenedWeightPatient(
+  admin: SupabaseClient,
+  accountId: string,
+  intakeId: string,
+  route: GlpInitiationRoute,
+): Promise<{ route: GlpInitiationRoute; queueItemId: string | null }> {
+  if (route === 'consult') {
+    await routeScreenedToConsult(admin, accountId);
+    return { route, queueItemId: null };
+  }
+  const queueItemId = await routeScreenedToReview(admin, accountId, intakeId);
+  return { route, queueItemId };
 }
 
 // Small convenience for callers/tests that step the mock status label.

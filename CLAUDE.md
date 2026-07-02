@@ -1126,6 +1126,60 @@ keyless (proven-by-mock, the same discipline every money phase used).
 - **Next:** C3 adds the consult checkout (Journey C, ~£100) reusing this surface with a
   consult descriptor + a GLP initiation routing switch (async-with-bloods vs consult).
 
+## Checkout C3 done (consult checkout — Journey C + the GLP initiation routing switch)
+
+Checkout roadmap C3 (spec `../fern/docs/fern-checkout-build-spec.md` s5 C + the C3
+prompt). Built + proven by `npm test` (171 passed, 165 -> 171; +6 C3 tests) + a live
+render walk (dev server, consult descriptor off then on). NOT deployed. Payments run
+the MOCK provider; the Stripe consult path is test-mode-ready (`PAYMENTS_IMPL=stripe`
+uses the existing `STRIPE_PRICE_CONSULT`), proven-by-mock like every money phase.
+
+- **Consult descriptor on the SHARED C2 surface.** `products.ts` gains a **`consult`**
+  descriptor (Journey C, `£100`, `kind: 'consult'`, door `both`, NOT gated by
+  `weightLossRx`, no medicine names). `Product.kind` broadened to
+  `'treatment' | 'consult'`; `startTreatmentCheckout` generalised to
+  **`startProductCheckout`** (kind-aware createCheckout + payment_ref + consent; the old
+  name kept as an alias). The `/checkout` surface + `/api/checkout/start` +
+  `/checkout/complete` now branch on kind: a paid **consult** finalises the consult fee
+  (existing `finaliseLatestPending`) and routes the patient to **book** (`/consult`); a
+  paid **treatment** runs the C2 screening gate. The mock checkout page shows the
+  existing "Consultation fee (£100)" line for `consult`.
+- **Paying the consult gates the full-lane booking.** Reuses the proven P5/P6 spine:
+  the consult payment flips `hasPaidConsult`, and `startConsultBooking` (gated on it)
+  advances to **`consult_booked`**. No new booking code — C3 just fronts it with the
+  shared checkout surface + consent capture.
+- **THE GLP INITIATION ROUTING SWITCH (`src/lib/weight/glp-routing.ts`).** One pure
+  function `glpInitiationRoute({consultRequired})` -> `'async' | 'consult'`, fed by a new
+  flag **`GLP_CONSULT_REQUIRED`** (env + `wrangler.jsonc` vars, default **false** = the
+  async base tier). Applied by `routeScreenedWeightPatient(admin, accountId, intakeId,
+  route)` in `screening/order.ts`: **async** -> `routeScreenedToReview` (results_ready ->
+  `in_review_queue` + a queue item, the existing path, UNAFFECTED); **consult** ->
+  `routeScreenedToConsult` (results_ready stays, lane set `full`, no queue item), then
+  the patient pays the consult + books (results_ready -> consult_booked). This is a
+  SWITCH, not a rewrite: both branches are legal machine edges out of `results_ready`,
+  and either way a clinician makes the prescribing decision. **One booking change:**
+  `BOOKABLE_FROM` in `consult/booking.ts` gains `results_ready` (the machine already
+  allowed `results_ready -> consult_booked`) so a screened GLP patient can book a consult.
+- **Hard line untouched:** `RX_ISSUED_PREDECESSORS` stays `['approved','consult_done']`;
+  NO machine transition added (results_ready -> consult_booked and consult_done ->
+  rx_issued already existed). The 3 hard-line tests are unchanged and green. Paying the
+  consult issues nothing — a clinician still decides at the consult.
+- **Proven (`test/c3-consult.test.ts`, 6):** the switch is pure and toggles
+  (async default / consult on the flag, both from the env flag); the consult descriptor
+  resolves regardless of `weightLossRx` and carries no drug term; **pay the consult via
+  the shared surface -> `hasPaidConsult` flips + consent recorded -> book ->
+  `consult_booked`**; the **async base path is unaffected** (screened GLP -> in_review_queue
+  + queue item); the **consult-mandatory path** (switch on) routes the same screened
+  patient to the consult lane (results_ready, lane full, no queue item), pays, books
+  (results_ready -> consult_booked), and a clinician **Issue** reaches `rx_issued` — the
+  ONLY path; and the predecessors of `rx_issued` are unchanged.
+- **Render walk (flag-off proof, RENDER not dist grep):** dev server, throwaway signup.
+  OFF -> `/checkout?product=consult` 200, waitlist only, no `£100`/consult copy. ON ->
+  renders "Consultation with a clinician / £100 / video consultation / Demo stand-in /
+  I consent", no drug term. `astro build` clean.
+- **Next:** C4 — membership (Journey D, ~£18/mo) via Stripe Billing test mode + the
+  customer portal + member repeats (Journey E).
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

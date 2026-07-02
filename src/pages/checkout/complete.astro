@@ -10,9 +10,11 @@
 import Layout from '../../layouts/Layout.astro';
 import { createAdminClient } from '../../lib/supabase/admin';
 import { getPayments, getScreening } from '../../lib/adapters/factory';
-import { ensureAccount, getJourney } from '../../lib/accounts';
+import { ensureAccount, getJourney, hasPaidConsult } from '../../lib/accounts';
 import { flagsFromEnv } from '../../lib/cta';
 import { finaliseTreatmentCheckout } from '../../lib/checkout/checkout';
+import { finaliseLatestPending } from '../../lib/payments/billing';
+import { getProduct } from '../../lib/checkout/products';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -22,21 +24,31 @@ const account = await ensureAccount(admin, user.id);
 if (account.role === 'clinician') return Astro.redirect('/clinician');
 
 const flags = flagsFromEnv(env);
+const product = getProduct(Astro.url.searchParams.get('product') ?? '', flags);
+const isConsult = product?.kind === 'consult';
 
 let problem: string | null = null;
 let gate: Awaited<ReturnType<typeof finaliseTreatmentCheckout>> | null = null;
-if (flags.purchaseEnabled && account.core_patient_id) {
+let consultPaid = false;
+if (flags.purchaseEnabled) {
   try {
     const payments = getPayments(env, admin);
-    const screening = getScreening(env, admin);
-    gate = await finaliseTreatmentCheckout(admin, payments, screening, account.id, account.core_patient_id);
+    if (isConsult) {
+      // Journey C: finalise the consult fee (marks it paid). Paying gates the
+      // full-lane booking; the patient books next. No screening gate here.
+      await finaliseLatestPending(admin, payments, account.id);
+      consultPaid = await hasPaidConsult(admin, account.id);
+    } else if (account.core_patient_id) {
+      const screening = getScreening(env, admin);
+      gate = await finaliseTreatmentCheckout(admin, payments, screening, account.id, account.core_patient_id);
+    }
   } catch (err) {
     problem = err instanceof Error ? err.message : String(err);
   }
 }
 
 const journey = await getJourney(admin, account.id);
-const paid = gate?.paymentStatus === 'paid';
+const paid = isConsult ? consultPaid : gate?.paymentStatus === 'paid';
 const onScreening =
   journey?.state === 'screening_kit_sent' ||
   journey?.state === 'sample_received' ||
@@ -53,7 +65,19 @@ const onScreening =
     <div class="card step-card stack">
       {problem && <p class="notice notice-error">{problem}</p>}
 
-      {paid && onScreening && (
+      {paid && isConsult && (
+        <>
+          <span class="pill">Paid</span>
+          <p>
+            Thank you. Your consultation fee is confirmed. You can now book your
+            consultation slot. A clinician decides the next step at the
+            consultation. Nothing has been prescribed.
+          </p>
+          <a href="/consult" class="btn btn-pri">Book your consultation</a>
+        </>
+      )}
+
+      {paid && !isConsult && onScreening && (
         <>
           <span class="pill">Paid</span>
           <p>
@@ -65,7 +89,7 @@ const onScreening =
         </>
       )}
 
-      {paid && !onScreening && (
+      {paid && !isConsult && !onScreening && (
         <>
           <span class="pill">Paid</span>
           <p>Your payment is confirmed. We will be in touch with your next step.</p>

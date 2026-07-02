@@ -301,14 +301,16 @@ describe('C2 copy discipline (product descriptors)', () => {
     expect(getProduct('menopause_screen', { weightLossRx: true })?.id).toBe('menopause_screen');
   });
 
-  it('no descriptor names a medicine or says "free"; each frames the screen by its worth', () => {
+  it('no descriptor names a medicine or says "free"; each screen is framed by its worth', () => {
     for (const product of Object.values(PRODUCTS)) {
       const blob = JSON.stringify(product).toLowerCase();
       expect(blob, `${product.id} contains a drug-adjacent term`).not.toMatch(DRUG_TERMS);
       expect(blob, `${product.id} says "free"`).not.toContain('free');
-      // The screen is framed by its worth (credited to / included, worth £X),
-      // never "free".
-      expect(blob, `${product.id} does not state a worth`).toContain('worth');
+      // The screen products frame the screen by its worth (credited to / included,
+      // worth £X), never "free". The consult descriptor carries no screen.
+      if (product.kind === 'treatment') {
+        expect(blob, `${product.id} does not state a worth`).toContain('worth');
+      }
     }
     // Journey A specifically credits the screen to treatment.
     expect(JSON.stringify(PRODUCTS.menopause_screen).toLowerCase()).toContain('credited');

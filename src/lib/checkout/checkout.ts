@@ -28,24 +28,29 @@ import type { Product } from './products';
 // non-clinical screening step; it is never a predecessor of a prescription.
 // ===========================================================================
 
-// Start a one-off treatment checkout for a product descriptor. Records the
-// explicit, timestamped consent (waitlist discipline) and the pending payment_ref
-// pointer, then returns the provider/mock hosted checkout URL. The card is taken
-// by the provider; the app DB only ever sees the session pointer + status +
-// a consent record (no amount, no card data, no PII).
-export async function startTreatmentCheckout(
+// Start a one-off checkout for a product descriptor (C2 treatment / C3 consult).
+// Records the explicit, timestamped consent (waitlist discipline) and the pending
+// payment_ref pointer under the product's payment kind, then returns the
+// provider/mock hosted checkout URL. The card is taken by the provider; the app DB
+// only ever sees the session pointer + status + a consent record (no amount, no
+// card data, no PII).
+export async function startProductCheckout(
   admin: SupabaseClient,
   payments: PaymentsAdapter,
   product: Product,
   accountId: string,
   returnUrl: string,
 ): Promise<string> {
-  const session = await payments.createCheckout('treatment', accountId, returnUrl);
-  await recordPaymentRef(admin, accountId, 'treatment', session.sessionId, 'pending');
+  const session = await payments.createCheckout(product.kind, accountId, returnUrl);
+  await recordPaymentRef(admin, accountId, product.kind, session.sessionId, 'pending');
   // Consent is captured at the checkout, tied to the session pointer + product.
   await recordCheckoutConsent(admin, accountId, product.id, session.sessionId);
   return session.clientUrl;
 }
+
+// Back-compat alias: the treatment checkout is a product checkout. Kept so C2
+// callers/tests read as before.
+export const startTreatmentCheckout = startProductCheckout;
 
 export interface TreatmentGateResult {
   // The latest treatment payment status (pending | paid | refunded | ...).
@@ -101,6 +106,17 @@ export async function finaliseTreatmentCheckout(
     }
   }
   return advanceOnTreatmentPaid(admin, screening, accountId, corePatientId);
+}
+
+// Convenience for the checkout surface: the paid/pending state for a product's
+// payment kind (treatment C2 / consult C3).
+export async function getProductCheckoutState(
+  admin: SupabaseClient,
+  accountId: string,
+  product: Product,
+): Promise<{ paid: boolean; pending: boolean; status: string | null }> {
+  const ref = await getLatestPaymentRef(admin, accountId, product.kind);
+  return { paid: ref?.status === 'paid', pending: ref?.status === 'pending', status: ref?.status ?? null };
 }
 
 // Convenience for the checkout surface: is there an unpaid pending treatment

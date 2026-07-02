@@ -4,7 +4,7 @@ import { getPayments } from '../../../lib/adapters/factory';
 import { ensureAccount } from '../../../lib/accounts';
 import { flagsFromEnv } from '../../../lib/cta';
 import { getProduct } from '../../../lib/checkout/products';
-import { startTreatmentCheckout } from '../../../lib/checkout/checkout';
+import { startProductCheckout } from '../../../lib/checkout/checkout';
 
 // Checkout C2: start a one-off pay-first checkout for a product descriptor
 // (journey A menopause screen / journey B weight treatment). Thin: the flags gate,
@@ -43,7 +43,7 @@ export const POST: APIRoute = async (ctx) => {
   try {
     const returnUrl = new URL(`/checkout/complete?product=${product.id}`, ctx.url).toString();
     const payments = getPayments(env, admin);
-    const clientUrl = await startTreatmentCheckout(admin, payments, product, account.id, returnUrl);
+    const clientUrl = await startProductCheckout(admin, payments, product, account.id, returnUrl);
     return ctx.redirect(clientUrl);
   } catch (err) {
     return ctx.redirect(

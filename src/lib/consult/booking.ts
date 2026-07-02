@@ -33,8 +33,11 @@ import type { JourneyState } from '../journey/states';
 
 // The journey states from which a full-lane consult may be booked: a patient
 // routed straight to the full lane sits at intake_submitted (lane full); an
-// escalated fast-lane patient sits at escalated. Both legally reach consult_booked.
-const BOOKABLE_FROM: readonly JourneyState[] = ['intake_submitted', 'escalated'];
+// escalated fast-lane patient sits at escalated; a SCREENED weight patient whose
+// bloods are in, routed to the consult lane by the GLP switch (C3,
+// GLP_CONSULT_REQUIRED), sits at results_ready (lane full). All legally reach
+// consult_booked (results_ready -> consult_booked is an existing machine edge).
+const BOOKABLE_FROM: readonly JourneyState[] = ['intake_submitted', 'escalated', 'results_ready'];
 
 export class BookingError extends Error {
   constructor(message: string) {

@@ -15,7 +15,7 @@ import { createAdminClient } from '../lib/supabase/admin';
 import { ensureAccount, getJourney } from '../lib/accounts';
 import { flagsFromEnv } from '../lib/cta';
 import { getProduct } from '../lib/checkout/products';
-import { getTreatmentCheckoutState } from '../lib/checkout/checkout';
+import { getProductCheckoutState } from '../lib/checkout/checkout';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -30,8 +30,14 @@ const error = Astro.url.searchParams.get('error');
 
 // Resolve only when the purchase funnel is on. Off -> render the waitlist only.
 const product = flags.purchaseEnabled ? getProduct(productId, flags) : null;
-const checkoutState = product ? await getTreatmentCheckoutState(admin, account.id) : null;
+const checkoutState = product ? await getProductCheckoutState(admin, account.id, product) : null;
 const journey = product ? await getJourney(admin, account.id) : null;
+
+// On a completed payment the surface routes on: the consult sends the patient to
+// book (Journey C gates the full-lane booking); the treatment products send them
+// to their screening / completion.
+const paidHref =
+  product?.kind === 'consult' ? '/consult' : `/checkout/complete?product=${product?.id}`;
 ---
 
 <Layout title="Checkout — Fern" navVariant="patient" user={user} narrow>
@@ -83,7 +89,7 @@ const journey = product ? await getJourney(admin, account.id) : null;
           {checkoutState?.paid ? (
             <div class="state-row">
               <span class="pill">Paid</span>
-              <a href={`/checkout/complete?product=${product.id}`} class="btn btn-pri">Continue</a>
+              <a href={paidHref} class="btn btn-pri">Continue</a>
             </div>
           ) : (
             <form method="POST" action="/api/checkout/start" class="pay-form">
@@ -96,9 +102,20 @@ const journey = product ? await getJourney(admin, account.id) : null;
               <label class="consent">
                 <input type="checkbox" name="consent" required />
                 <span>
-                  I consent to Fern processing this checkout and posting my at-home
-                  screening kit. I understand a clinician reviews my results before
-                  any treatment is discussed, and that this screen is not a diagnosis.
+                  {product.kind === 'consult' ? (
+                    <>
+                      I consent to Fern processing this checkout and booking my
+                      consultation. I understand a clinician decides the next step at
+                      the consultation, and that nothing is prescribed without that
+                      assessment.
+                    </>
+                  ) : (
+                    <>
+                      I consent to Fern processing this checkout and posting my at-home
+                      screening kit. I understand a clinician reviews my results before
+                      any treatment is discussed, and that this screen is not a diagnosis.
+                    </>
+                  )}
                 </span>
               </label>
               <button type="submit" class="btn btn-pri btn-block pay">Pay {product.price}</button>

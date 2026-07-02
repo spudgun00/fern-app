@@ -20,7 +20,7 @@
 import type { CheckoutKind } from '../adapters/payments';
 import type { CtaFlags, FrontDoor } from '../cta';
 
-export type ProductId = 'menopause_screen' | 'weight_treatment';
+export type ProductId = 'menopause_screen' | 'weight_treatment' | 'consult';
 
 export interface LineItem {
   label: string;
@@ -30,11 +30,12 @@ export interface LineItem {
 
 export interface Product {
   id: ProductId;
-  door: FrontDoor;
-  // Every C2 product transmits through the pay-first one-off 'treatment' kind, so
-  // the automatic refund-on-refusal (P4) covers it and the screening kit is
-  // ordered on payment.
-  kind: Extract<CheckoutKind, 'treatment'>;
+  door: FrontDoor | 'both';
+  // C2 products (screen / weight) transmit through the pay-first one-off
+  // 'treatment' kind (so the P4 refund covers them + the kit is ordered on pay).
+  // C3 adds the 'consult' one-off (Journey C, ~£100), which instead gates the
+  // full-lane booking (consult_booked). The surface branches on this.
+  kind: Extract<CheckoutKind, 'treatment' | 'consult'>;
   title: string;
   // The real, single-figure price shown at checkout (working figures; the finance
   // /compliance pass locks them). Kept as a display string; the app DB never
@@ -101,6 +102,27 @@ export const PRODUCTS: Record<ProductId, Product> = {
     unlocks:
       'We post your at-home screening kit. Once your results are in, a clinician reviews them and decides the safe next step. Nothing is prescribed without that review.',
     requiresRx: true,
+  },
+  // Journey C — the 1:1 video consultation (~£100), an upsell or, where the
+  // compliance pass makes it mandatory, the required step to initiate treatment.
+  // Door-agnostic; not gated by weightLossRx (no medicine names appear). Paying
+  // it gates the full-lane booking (consult_booked), it does NOT prescribe.
+  consult: {
+    id: 'consult',
+    door: 'both',
+    kind: 'consult',
+    title: 'Consultation with a clinician',
+    price: '£100',
+    framing: 'A one-to-one video consultation with a clinician to assess your care.',
+    lineItems: [
+      {
+        label: 'Video consultation with a clinician',
+        note: 'a clinician assesses your care and decides the safe next step',
+      },
+    ],
+    unlocks:
+      'Once paid, you can book your consultation slot. The clinician decides the next step at the consult. Nothing is prescribed without that assessment.',
+    requiresRx: false,
   },
 };
 
