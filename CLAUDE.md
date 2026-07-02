@@ -1013,6 +1013,54 @@ this patient-zone app (`fern-app.jimgill.workers.dev`), but it touches the SHARE
   local resolver (`sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`)
   or wait out the TTL — it is NOT a cutover failure.
 
+## Checkout C1 done (purchase-CTA switch + entry CTAs — surface + wiring only)
+
+Checkout roadmap C1 (source of truth `../fern/docs/fern-checkout-build-spec.md` s3;
+this repo's first `D-checkout` phase). Built + proven by `npm test` (155 passed,
+144 -> 155; +11 C1 tests) + a live homepage render walk. Not deployed. NO payment,
+NO Stripe, NO checkout surface added — this is the CTA switch + its wiring.
+
+- **Two new flags (`env.ts`, non-secret `vars`, both OFF by default):**
+  `PURCHASE_ENABLED` (the purchase-CTA switch) and `WEIGHTLOSS_RX_ENABLED` (gates the
+  weight door, mirrors the marketing site). `WAITLIST_URL` (default
+  `https://fern.care/#join`) is where "Get early access" routes. Same discipline as
+  the marketing `weightLossRx`: default off in code, flip to `true` on the
+  password-gated preview to render the funnel; public ONLY on CQC + clinical lead +
+  compliance sign-off. **The demo/preview now needs `PURCHASE_ENABLED=true` (and
+  `WEIGHTLOSS_RX_ENABLED=true`) to show the P5/P6 purchase flow** — the default-off
+  posture is deliberately waitlist-only.
+- **One pure switch (`src/lib/cta.ts`), unit-tested in isolation:** `entryCta(door,
+  flags)` resolves every entry CTA. OFF -> `{label:'Get early access', href:
+  waitlistUrl}`. ON -> menopause `'Start your health screen'`, weight `'Start your
+  assessment'`, both -> `/signup` (account -> ID -> intake; the onboarding chain is
+  linear). Weight door returns `null` whenever `weightLossRx` is off (no
+  "assessment" copy renders at all, either state). No medicine name appears in any
+  label in any of the four flag combinations (asserted).
+- **Entry CTAs wired:** `index.astro` menopause hero (always present) + a weight
+  front-door card (only when `weightLossRx` on). Pages read the flags via
+  `flagsFromEnv(Astro.locals.env)`.
+- **In-app purchase CTAs gated by the SAME flag (routing entry points only, no
+  checkout built):** the P5/P6 surfaces present their purchase actions only when
+  `purchaseEnabled` is on; off shows a `WaitlistCta` (`src/components/WaitlistCta.astro`,
+  no price/subscription/medicine copy) instead. Gated: `account/billing` (consult fee
+  + membership + portal), `consult` (pay-gate + book), `treatment` (repeat +
+  subscribe), `intake` (the full-lane "Book your consultation" -> waitlist link when
+  off). Record/status views (the prescription, dispensing tracking) are NOT purchase
+  copy and stay visible. **Note (SSR):** the app is `output: 'server'`, so a static
+  `grep dist/` finds both branches' string literals in the compiled server chunks
+  (unlike the static marketing site) — the flag-off "purchase-copy clean" proof is a
+  RENDER walk, not a dist grep. `dist/` is drug-string clean regardless (none exist).
+- **Hard line untouched:** `RX_ISSUED_PREDECESSORS` stays `['approved',
+  'consult_done']`; the 3 existing hard-line tests are unchanged and green. C1 only
+  touches presentation + one pure resolver + flag parsing; no journey/decision code.
+- **Proven:** `npm test` 155 passed (incl. the unchanged hard-line + P5/P6 tests, which
+  exercise lib orchestration not page rendering, so the CTA gating does not affect
+  them). Live homepage render: OFF -> one "Get early access" -> `https://fern.care/#join`,
+  no "Start your…"; ON (both flags) -> "Start your health screen" + "Start your
+  assessment", both -> `/signup`, no "Get early access". `astro build` clean.
+- **Next:** C2 builds the shared one-off checkout (journeys A + B) over
+  `startCheckout('treatment', …)` in Stripe test mode.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

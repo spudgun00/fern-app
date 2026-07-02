@@ -6,9 +6,11 @@
 // public-site figures (~£100 consult, ~£18/mo membership) are shown transparently
 // with no efficacy claims.
 import Layout from '../../layouts/Layout.astro';
+import WaitlistCta from '../../components/WaitlistCta.astro';
 import { createAdminClient } from '../../lib/supabase/admin';
 import { ensureAccount, getJourney } from '../../lib/accounts';
 import { getBillingView } from '../../lib/payments/billing';
+import { flagsFromEnv } from '../../lib/cta';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -24,6 +26,10 @@ const error = Astro.url.searchParams.get('error');
 const notice = Astro.url.searchParams.get('notice');
 
 const memberStatus = view.membership?.status ?? 'inactive';
+
+// C1: the purchase surface only renders when the purchase funnel is on. Off
+// (pre-CQC default) shows the waitlist and NO price/subscription copy.
+const flags = flagsFromEnv(env);
 ---
 
 <Layout title="Membership and billing — Fern" navVariant="patient" user={user} narrow>
@@ -36,6 +42,9 @@ const memberStatus = view.membership?.status ?? 'inactive';
     {error && <p class="notice notice-error top-notice">{error}</p>}
     {notice && <p class="notice notice-info top-notice">{notice}</p>}
 
+    {!flags.purchaseEnabled && <WaitlistCta href={flags.waitlistUrl} />}
+    {flags.purchaseEnabled && (
+    <>
     <div class="card price-card top-notice">
       <div class="price-head">
         <h2>Consultation fee</h2>
@@ -100,6 +109,8 @@ const memberStatus = view.membership?.status ?? 'inactive';
         )
       }
     </div>
+    </>
+    )}
 
     <p class="soft devline">
       <span class="dev-tag">Demo detail</span>

@@ -12,6 +12,7 @@ import { createAdminClient } from '../lib/supabase/admin';
 import { getClinicalCore, getDispensing } from '../lib/adapters/factory';
 import { ensureAccount, getJourney } from '../lib/accounts';
 import { getTreatmentView } from '../lib/dispensing/dispense';
+import { flagsFromEnv } from '../lib/cta';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -36,6 +37,11 @@ const STATUS_COPY: Record<string, string> = {
 };
 const statusLabel = (s: string | undefined) => (s ? (STATUS_COPY[s] ?? s) : 'Not yet sent');
 const isMock = env.DISPENSING_IMPL !== 'stripe' && env.DISPENSING_IMPL !== 'cloudrx';
+
+// C1: the repeat + membership actions are purchase CTAs; they only render when
+// the purchase funnel is on. Off (pre-CQC default) hides them (the prescription
+// record + dispensing status remain visible; neither is purchase copy).
+const flags = flagsFromEnv(env);
 ---
 
 <Layout title="Your treatment — Fern" navVariant="patient" user={user} active="/treatment" narrow>
@@ -110,7 +116,7 @@ const isMock = env.DISPENSING_IMPL !== 'stripe' && env.DISPENSING_IMPL !== 'clou
             )}
           </div>
 
-          {view.dispense && (
+          {flags.purchaseEnabled && view.dispense && (
             <div class="card">
               <h2>Repeat</h2>
               {view.canRequestRepeat ? (

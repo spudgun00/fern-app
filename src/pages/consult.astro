@@ -7,10 +7,12 @@
 //
 // Describe-never-diagnose: copy states the next step plainly, never a diagnosis.
 import Layout from '../layouts/Layout.astro';
+import WaitlistCta from '../components/WaitlistCta.astro';
 import { createAdminClient } from '../lib/supabase/admin';
 import { getBooking, getVideo } from '../lib/adapters/factory';
 import { ensureAccount } from '../lib/accounts';
 import { getConsultView } from '../lib/consult/booking';
+import { flagsFromEnv } from '../lib/cta';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -25,6 +27,9 @@ const video = getVideo(env, admin);
 const view = await getConsultView(admin, booking, video, account.id);
 
 const error = Astro.url.searchParams.get('error');
+// C1: the consult pay-gate + booking are purchase routing entry points; they
+// only render when the purchase funnel is on. Off shows the waitlist instead.
+const flags = flagsFromEnv(env);
 const state = view.state;
 const inRoom = state === 'consult_booked' || state === 'consult_done';
 const pendingBooking = view.booking?.status === 'pending';
@@ -83,15 +88,19 @@ const afterConsult =
           )}
         </div>
       ) : !view.consultPaid ? (
-        <div class="card step-card stack">
-          <span class="pill pill-soft">Step 1 &middot; Consultation fee</span>
-          <h2>Pay for your consultation</h2>
-          <p class="muted">
-            An assessed first prescription follows a consultation with a clinician.
-            Pay the consultation fee, then book your slot.
-          </p>
-          <a href="/account/billing" class="btn btn-pri">Go to billing to pay the consultation fee</a>
-        </div>
+        !flags.purchaseEnabled ? (
+          <WaitlistCta href={flags.waitlistUrl} />
+        ) : (
+          <div class="card step-card stack">
+            <span class="pill pill-soft">Step 1 &middot; Consultation fee</span>
+            <h2>Pay for your consultation</h2>
+            <p class="muted">
+              An assessed first prescription follows a consultation with a clinician.
+              Pay the consultation fee, then book your slot.
+            </p>
+            <a href="/account/billing" class="btn btn-pri">Go to billing to pay the consultation fee</a>
+          </div>
+        )
       ) : pendingBooking ? (
         <div class="card step-card stack">
           <span class="pill pill-soft">Booking in progress</span>
@@ -100,17 +109,21 @@ const afterConsult =
           <a href="/consult/book/complete" class="link">Refresh booking status</a>
         </div>
       ) : view.canBook ? (
-        <div class="card step-card stack">
-          <span class="pill pill-soft">Step 2 &middot; Book a slot</span>
-          <h2>Book your consultation</h2>
-          <p class="muted">
-            Your consultation fee is paid. Choose a slot with a clinician. The
-            consultation is by video; nothing is prescribed without it.
-          </p>
-          <form method="POST" action="/api/consult/book/start">
-            <button type="submit" class="btn btn-pri">Book your consult</button>
-          </form>
-        </div>
+        !flags.purchaseEnabled ? (
+          <WaitlistCta href={flags.waitlistUrl} />
+        ) : (
+          <div class="card step-card stack">
+            <span class="pill pill-soft">Step 2 &middot; Book a slot</span>
+            <h2>Book your consultation</h2>
+            <p class="muted">
+              Your consultation fee is paid. Choose a slot with a clinician. The
+              consultation is by video; nothing is prescribed without it.
+            </p>
+            <form method="POST" action="/api/consult/book/start">
+              <button type="submit" class="btn btn-pri">Book your consult</button>
+            </form>
+          </div>
+        )
       ) : (
         <div class="card step-card stack">
           <p class="muted">

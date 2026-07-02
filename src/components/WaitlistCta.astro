@@ -1,0 +1,25 @@
+---
+// The waitlist fallback shown wherever a purchase CTA would appear while the
+// purchase funnel is off (purchaseEnabled=false, the pre-CQC default). It carries
+// NO price, subscription or medicine copy, so an off-state render of any purchase
+// surface stays purchase-copy clean. Routes to the marketing-site waitlist.
+export interface Props {
+  href: string;
+  /** Optional line of context above the CTA. */
+  blurb?: string;
+}
+const {
+  href,
+  blurb = 'We are not open for sign-ups here yet. Join the waitlist and we will let you know the moment care opens.',
+} = Astro.props;
+---
+<div class="card step-card stack waitlist-cta">
+  <span class="pill pill-soft">Waitlist</span>
+  <p>{blurb}</p>
+  <a href={href} class="btn btn-pri">Get early access</a>
+</div>
+
+<style>
+  .waitlist-cta { margin-top: 24px; }
+  .waitlist-cta .btn { align-self: flex-start; }
+</style>

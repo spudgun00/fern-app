@@ -1,6 +1,14 @@
 ---
 import Layout from '../layouts/Layout.astro';
-const { user } = Astro.locals;
+import { entryCta, flagsFromEnv } from '../lib/cta';
+const { user, env } = Astro.locals;
+
+// The entry-CTA switch (C1). Off by default -> "Get early access" -> waitlist.
+// On -> the purchase funnel (account -> ID -> intake). The weight door only
+// exists when weightLossRx is on (menoCta is always present).
+const flags = flagsFromEnv(env);
+const menoCta = entryCta('menopause', flags);
+const weightCta = entryCta('weight', flags);
 ---
 {
   user ? (
@@ -37,15 +45,29 @@ const { user } = Astro.locals;
           <span class="eyebrow">Patient zone</span>
           <h1>Menopause care, <em>online</em></h1>
           <p class="lede">
-            Clinician-led perimenopause and menopause care. Create an account to
-            walk the patient journey, from identity and intake through to a
-            clinician decision, your treatment and membership.
+            Clinician-led perimenopause and menopause care, guideline-led and
+            properly governed.
           </p>
         </div>
         <div class="row">
-          <a href="/signup" class="btn btn-pri">Create your account</a>
+          {menoCta && <a href={menoCta.href} class="btn btn-pri">{menoCta.label}</a>}
           <a href="/login" class="btn btn-ghost">Log in</a>
         </div>
+
+        {
+          weightCta && (
+            <div class="card door stack">
+              <span class="eyebrow">Weight and metabolic health</span>
+              <h2>A second front door, same clinician-led service</h2>
+              <p class="muted">
+                Screening-led weight and metabolic care, on the same regulated
+                service.
+              </p>
+              <a href={weightCta.href} class="btn btn-pri door-cta">{weightCta.label}</a>
+            </div>
+          )
+        }
+
         <p class="soft">
           This is a demonstration on dummy data.
           <a href="/about-this-demo" class="link">About this demo</a>
@@ -58,4 +80,7 @@ const { user } = Astro.locals;
 <style>
   .row { display: flex; flex-wrap: wrap; gap: 14px; }
   .devline { padding-top: 8px; }
+  .door { align-items: flex-start; }
+  .door h2 { font-size: 20px; }
+  .door-cta { align-self: flex-start; }
 </style>

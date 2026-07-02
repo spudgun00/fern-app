@@ -13,6 +13,7 @@ import { getClinicalCore } from '../lib/adapters/factory';
 import { ensureAccount, getJourney, getLatestIntakeRef } from '../lib/accounts';
 import { SYMPTOM_OPTIONS, SCREEN_QUESTIONS } from '../lib/intake/questionnaire';
 import type { RoutingDecision } from '../lib/intake/routing';
+import { flagsFromEnv } from '../lib/cta';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -51,6 +52,11 @@ const approved =
   journey?.state === 'dispensing' ||
   journey?.state === 'delivered';
 const booked = journey?.state === 'consult_booked' || journey?.state === 'consult_done';
+
+// C1: "Book your consultation" routes into the paid consult funnel, so it is a
+// purchase routing entry point (gated by purchaseEnabled). Off shows the
+// waitlist link instead. The record/booked/refused branches are unchanged.
+const flags = flagsFromEnv(env);
 ---
 
 <Layout title="Your intake — Fern" navVariant="patient" user={user} narrow>
@@ -94,7 +100,11 @@ const booked = journey?.state === 'consult_booked' || journey?.state === 'consul
                 A clinician has reviewed your intake. The safer next step is an
                 assessed consultation with a clinician.
               </p>
-              <a href="/consult" class="btn btn-pri">Book your consultation</a>
+              {flags.purchaseEnabled ? (
+                <a href="/consult" class="btn btn-pri">Book your consultation</a>
+              ) : (
+                <a href={flags.waitlistUrl} class="btn btn-pri">Get early access</a>
+              )}
             </div>
           )}
 
@@ -124,7 +134,11 @@ const booked = journey?.state === 'consult_booked' || journey?.state === 'consul
                 Based on your answers, the safer next step is an assessed
                 consultation with a clinician.
               </p>
-              <a href="/consult" class="btn btn-pri">Book your consultation</a>
+              {flags.purchaseEnabled ? (
+                <a href="/consult" class="btn btn-pri">Book your consultation</a>
+              ) : (
+                <a href={flags.waitlistUrl} class="btn btn-pri">Get early access</a>
+              )}
             </div>
           )}
 

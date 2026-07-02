@@ -25,6 +25,12 @@
   // mail.fern.care sender). Leave "mock" to log emails server-side with no keys.
   // SCREENING_IMPL selects the ScreeningAdapter (weight P2, at-home blood test);
   // "mock" persists a fake panel to mock_screening. The real UKAS lab slots in later.
+  // PURCHASE_ENABLED (C1) is the purchase-CTA switch: OFF (default, pre-CQC) =
+  // every entry CTA reads "Get early access" -> the waitlist; flip to "true" on the
+  // password-gated preview (mirrors WEIGHTLOSS_RX_ENABLED) to render the purchase
+  // funnel. WEIGHTLOSS_RX_ENABLED additionally gates the weight door (no "assessment"
+  // copy while off). It goes public ONLY on CQC + clinical lead + compliance sign-off.
+  // WAITLIST_URL is where the "Get early access" CTA routes (marketing-site waitlist).
   "vars": {
     "CORE_IMPL": "mock",
     "DISPENSING_IMPL": "mock",
@@ -33,6 +39,9 @@
     "BOOKING_IMPL": "mock",
     "VIDEO_IMPL": "mock",
     "EMAIL_IMPL": "mock",
-    "SCREENING_IMPL": "mock"
+    "SCREENING_IMPL": "mock",
+    "PURCHASE_ENABLED": "false",
+    "WEIGHTLOSS_RX_ENABLED": "false",
+    "WAITLIST_URL": "https://fern.care/#join"
   }
 }

@@ -46,9 +46,20 @@ export interface AppEnv {
   // the app's email DNS stays isolated from the Brevo waitlist mail on the apex.
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
+  // C1 purchase-CTA switch. PURCHASE_ENABLED is OFF by default (pre-CQC): every
+  // entry CTA reads "Get early access" and routes to the waitlist. Flip it on
+  // (post CQC + clinical lead + compliance sign-off) and the entry CTAs become
+  // the purchase funnel (account -> ID -> intake). WEIGHTLOSS_RX_ENABLED
+  // additionally gates the weight door (mirrors the marketing site) so no
+  // "assessment" copy renders while it is off. WAITLIST_URL is where the
+  // "Get early access" CTA routes (the marketing-site waitlist). Non-secret vars.
+  PURCHASE_ENABLED: boolean;
+  WEIGHTLOSS_RX_ENABLED: boolean;
+  WAITLIST_URL: string;
 }
 
 const DEFAULT_EMAIL_FROM = 'Fern <noreply@mail.fern.care>';
+const DEFAULT_WAITLIST_URL = 'https://fern.care/#join';
 
 const REQUIRED = [
   'PUBLIC_SUPABASE_URL',
@@ -92,6 +103,10 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const resendApiKey = get('RESEND_API_KEY');
   const emailFrom = get('EMAIL_FROM');
   const screeningImpl = String(get('SCREENING_IMPL') ?? 'mock');
+  const boolFlag = (v: unknown) => String(v ?? '').toLowerCase() === 'true';
+  const purchaseEnabled = boolFlag(get('PURCHASE_ENABLED'));
+  const weightLossRx = boolFlag(get('WEIGHTLOSS_RX_ENABLED'));
+  const waitlistUrl = get('WAITLIST_URL');
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
   // keeping them out of REQUIRED lets mock dev + tests run without them.
@@ -176,5 +191,8 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     RESEND_API_KEY: resendApiKey != null ? String(resendApiKey) : undefined,
     EMAIL_FROM: emailFrom != null ? String(emailFrom) : DEFAULT_EMAIL_FROM,
     SCREENING_IMPL: screeningImpl,
+    PURCHASE_ENABLED: purchaseEnabled,
+    WEIGHTLOSS_RX_ENABLED: weightLossRx,
+    WAITLIST_URL: waitlistUrl != null && String(waitlistUrl) ? String(waitlistUrl) : DEFAULT_WAITLIST_URL,
   };
 }
