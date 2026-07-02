@@ -1180,6 +1180,55 @@ uses the existing `STRIPE_PRICE_CONSULT`), proven-by-mock like every money phase
 - **Next:** C4 — membership (Journey D, ~£18/mo) via Stripe Billing test mode + the
   customer portal + member repeats (Journey E).
 
+## Checkout C4 done (membership + portal + member repeat — journeys D + E, test mode)
+
+Checkout roadmap C4 (spec `../fern/docs/fern-checkout-build-spec.md` s5 D/E + the C4
+prompt). Built + proven by `npm test` (178 passed, 171 -> 178; +7 C4 tests) + a live
+render check of the billing surface. NOT deployed. Payments run the MOCK provider;
+the Stripe Billing path is test-mode-ready, proven-by-mock like every money phase.
+
+- **Most of D + E already shipped in P5** (membership via `startCheckout('membership')`
+  -> `active_member`; `finaliseMembershipCancel`; the customer portal routes
+  `/api/payments/portal` + `/api/payments/mock-portal-cancel`; member repeats via
+  `lodgeRepeatRequest`, member-only + no-charge + never auto-issued). C4 adds the named
+  `startSubscription` wrapper and the ONE genuinely-new piece below, then re-proves the
+  D + E success tests as a dedicated phase.
+- **THE NEW PIECE — one provider customer per patient (spec s4).** P5 minted the Stripe
+  customer only at the subscription checkout; C4 makes a SINGLE customer per patient,
+  created once and reused across the one-offs, the subscription, and the portal. A new
+  `payments_customer` pointer table (migration `20260702000001_c4_customer.sql`, applied
+  to the remote dev DB — account_id unique + provider_customer_ref, POINTER only, no card
+  data / PII). New adapter method `PaymentsAdapter.ensureCustomer(accountId, existingRef?)`
+  (MockPayments mints `mock_cus_…`; StripePayments POSTs `/customers`), and
+  `createCheckout(..., customerRef?)` now attaches the session to that customer (mock
+  stores it on the session; Stripe passes `customer=`). `getOrCreateCustomer` (billing.ts)
+  reads/creates + persists the pointer; `startCheckout` and the C2/C3 `startProductCheckout`
+  both thread it, so consult, treatment, and membership all resolve to the same customer.
+- **`startSubscription(admin, payments, accountId, returnUrl)`** — the Journey D named
+  wrapper over the shared checkout for the recurring `membership` kind (Stripe Billing,
+  mocked). The customer is attached by `startCheckout`, so the subscription rides the
+  patient's single customer.
+- **Hard line untouched:** no journey-machine change (membership still via the existing
+  `delivered -> active_member`); `RX_ISSUED_PREDECESSORS` stays `['approved','consult_done']`;
+  a member repeat enters the queue and is NEVER auto-issued (a clinician decides). The 3
+  hard-line tests are unchanged and green.
+- **Proven (`test/c4-membership.test.ts`, 7):** **subscribe -> `active_member`** (via
+  `startSubscription`, membership active + customer/subscription pointers set); **one
+  customer per patient** — a one-off consult then a subscription share the SAME
+  provider customer (the one-off session's `customer_ref` == `payments_customer` ==
+  `membership.provider_customer_ref`), and `getOrCreateCustomer` is idempotent; **portal
+  cancel -> `canceled`** (isActiveMember false, the no-charge repeat revoked); **member
+  repeat (Journey E) -> the review queue with NO new consult charge and NO script issued**
+  (prescriptions stay at 1 — a clinician still decides); a non-member is gated; and the
+  rx_issued predecessors are unchanged.
+- **Render check:** `/account/billing` (flags on) renders "Consultation fee / Pay the
+  consultation fee / Membership / Subscribe to membership (£18/mo)", no drug terms — the
+  P5/D2 surface unaffected by the customer plumbing. `astro build` clean.
+- **Checkout roadmap after C4:** C1–C4 done + green (178 tests). C5 (medication F +
+  add-ons G) and C6 (the menopause HRT catalogue behind a `menopauseRx` flag, which the
+  C2 Journey-A placeholder points at) remain. Real Stripe + real clinical core go live
+  only on CQC + clinical lead + compliance sign-off.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

@@ -10,6 +10,7 @@ import {
   setPaymentRefStatus,
 } from '../accounts';
 import { orderScreeningKit } from '../screening/order';
+import { getOrCreateCustomer } from '../payments/billing';
 import type { Product } from './products';
 
 // ===========================================================================
@@ -41,7 +42,10 @@ export async function startProductCheckout(
   accountId: string,
   returnUrl: string,
 ): Promise<string> {
-  const session = await payments.createCheckout(product.kind, accountId, returnUrl);
+  // C4: attach to the patient's single provider customer (one per patient across
+  // one-offs + subscription + portal).
+  const customerRef = await getOrCreateCustomer(admin, payments, accountId);
+  const session = await payments.createCheckout(product.kind, accountId, returnUrl, customerRef);
   await recordPaymentRef(admin, accountId, product.kind, session.sessionId, 'pending');
   // Consent is captured at the checkout, tied to the session pointer + product.
   await recordCheckoutConsent(admin, accountId, product.id, session.sessionId);

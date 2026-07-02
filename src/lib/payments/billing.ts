@@ -6,11 +6,13 @@ import {
   getMembership,
   getLatestPaymentRef,
   getLatestPendingPaymentRef,
+  getPaymentsCustomerRef,
   hasPaidConsult,
   isActiveMember,
   recordPaymentRef,
   setMembershipStatusByCustomer,
   setPaymentRefStatus,
+  setPaymentsCustomerRef,
   upsertMembership,
   type Membership,
 } from '../accounts';
@@ -45,9 +47,39 @@ export async function startCheckout(
   accountId: string,
   returnUrl: string,
 ): Promise<string> {
-  const session = await payments.createCheckout(kind, accountId, returnUrl);
+  // C4: attach to the patient's single provider customer (created once, reused).
+  const customerRef = await getOrCreateCustomer(admin, payments, accountId);
+  const session = await payments.createCheckout(kind, accountId, returnUrl, customerRef);
   await recordPaymentRef(admin, accountId, kind, session.sessionId, 'pending');
   return session.clientUrl;
+}
+
+// C4: one provider customer per patient. Reads the stored pointer; if absent,
+// asks the adapter to create a customer and persists it. Reused across one-offs,
+// the subscription, and the portal, so all resolve to the same customer.
+export async function getOrCreateCustomer(
+  admin: SupabaseClient,
+  payments: PaymentsAdapter,
+  accountId: string,
+): Promise<string> {
+  const existing = await getPaymentsCustomerRef(admin, accountId);
+  if (existing) return existing;
+  const ref = await payments.ensureCustomer(accountId, null);
+  await setPaymentsCustomerRef(admin, accountId, ref);
+  return ref;
+}
+
+// C4: the membership subscription start (Journey D). A named wrapper over the
+// shared checkout for the recurring 'membership' kind — Stripe Billing in test
+// mode, mocked behind MockPayments. The customer is attached by startCheckout, so
+// the subscription rides the patient's single customer.
+export async function startSubscription(
+  admin: SupabaseClient,
+  payments: PaymentsAdapter,
+  accountId: string,
+  returnUrl: string,
+): Promise<string> {
+  return startCheckout(admin, payments, 'membership', accountId, returnUrl);
 }
 
 // The return-page entry point: finalise whatever checkout is in flight for this

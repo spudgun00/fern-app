@@ -51,16 +51,29 @@ export class StripePayments implements PaymentsAdapter {
     return json;
   }
 
+  // C4: ensure ONE Stripe customer per patient. Returns the existing id when
+  // passed one; else creates a customer (metadata.account_id, no PII beyond what
+  // Stripe collects at checkout) and returns its id. The app persists it
+  // (payments_customer) and passes it back so all later sessions share it.
+  async ensureCustomer(accountId: string, existingRef?: string | null): Promise<string> {
+    if (existingRef) return existingRef;
+    const json = await this.call('/customers', 'POST', {
+      'metadata[account_id]': accountId,
+    });
+    return String(json.id);
+  }
+
   async createCheckout(
     kind: CheckoutKind,
     accountId: string,
     returnUrl: string,
+    customerRef?: string | null,
   ): Promise<CheckoutSession> {
-    // The consult is a one-off (mode=payment); the membership is recurring
-    // (mode=subscription). metadata.account_id + metadata.kind let the webhook
-    // map the session back to an account with no PII. Stripe holds the card.
+    // The consult/treatment are one-offs (mode=payment); the membership is
+    // recurring (mode=subscription). metadata.account_id + metadata.kind let the
+    // webhook map the session back to an account with no PII. Stripe holds the card.
     const isMembership = kind === 'membership';
-    const json = await this.call('/checkout/sessions', 'POST', {
+    const form: Record<string, string> = {
       mode: isMembership ? 'subscription' : 'payment',
       'line_items[0][price]': isMembership ? this.priceMembership : this.priceConsult,
       'line_items[0][quantity]': '1',
@@ -69,7 +82,11 @@ export class StripePayments implements PaymentsAdapter {
       client_reference_id: accountId,
       'metadata[account_id]': accountId,
       'metadata[kind]': kind,
-    });
+    };
+    // C4: attach to the patient's single customer when known, so one-offs +
+    // subscription + portal all resolve to the same customer.
+    if (customerRef) form.customer = customerRef;
+    const json = await this.call('/checkout/sessions', 'POST', form);
     return { sessionId: String(json.id), clientUrl: String(json.url) };
   }
 

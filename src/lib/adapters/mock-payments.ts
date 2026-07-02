@@ -30,15 +30,24 @@ export class MockPayments implements PaymentsAdapter {
     throw new Error(`MockPayments.${op}: ${message}`);
   }
 
+  // C4: mint (or reuse) the single customer for this patient. The mock stands in
+  // for Stripe's customer object; it holds no PII (the mock has none).
+  async ensureCustomer(_accountId: string, existingRef?: string | null): Promise<string> {
+    return existingRef ?? `mock_cus_${crypto.randomUUID()}`;
+  }
+
   async createCheckout(
     kind: CheckoutKind,
     accountId: string,
     returnUrl: string,
+    customerRef?: string | null,
   ): Promise<CheckoutSession> {
     const id = crypto.randomUUID();
+    // Attach the session to the patient's single customer (C4) when known, so a
+    // one-off + a later subscription share one customer.
     const { error } = await this.db
       .from('mock_payment_session')
-      .insert({ id, account_id: accountId, kind, status: 'open' });
+      .insert({ id, account_id: accountId, kind, status: 'open', customer_ref: customerRef ?? null });
     if (error) this.fail('createCheckout', error.message);
     const clientUrl =
       `/account/billing/mock?session=${id}&kind=${kind}&return=${encodeURIComponent(returnUrl)}`;

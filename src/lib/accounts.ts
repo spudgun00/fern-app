@@ -716,6 +716,38 @@ export async function isActiveMember(db: SupabaseClient, accountId: string): Pro
 }
 
 // ---------------------------------------------------------------------------
+// Payments customer pointer (checkout C4). ONE provider (Stripe) customer per
+// patient, reused across the one-off charges, the subscription, and the portal.
+// POINTER only (the provider customer id); NO card data, NO PII.
+// ---------------------------------------------------------------------------
+export async function getPaymentsCustomerRef(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<string | null> {
+  const { data, error } = await db
+    .from('payments_customer')
+    .select('provider_customer_ref')
+    .eq('account_id', accountId)
+    .maybeSingle();
+  if (error) throw new Error(`getPaymentsCustomerRef: ${error.message}`);
+  return (data?.provider_customer_ref as string | undefined) ?? null;
+}
+
+export async function setPaymentsCustomerRef(
+  db: SupabaseClient,
+  accountId: string,
+  providerCustomerRef: string,
+): Promise<void> {
+  const { error } = await db
+    .from('payments_customer')
+    .upsert(
+      { account_id: accountId, provider_customer_ref: providerCustomerRef, updated_at: new Date().toISOString() },
+      { onConflict: 'account_id' },
+    );
+  if (error) throw new Error(`setPaymentsCustomerRef: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
 // Booking pointer (P6, the full lane). booking_ref (P0 table, extended in P6) is
 // a POINTER + scheduling/decision status only: which account, a pointer into the
 // booking provider (provider_ref = the Cal.com booking / correlation id), the

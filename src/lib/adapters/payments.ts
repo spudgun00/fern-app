@@ -45,10 +45,18 @@ export interface PortalSession {
 }
 
 export interface PaymentsAdapter {
+  // C4: ensure a single provider customer exists for this patient, reused across
+  // one-offs + subscription + portal. Returns the existing ref when passed one,
+  // else creates a customer and returns its id. The caller persists the id
+  // (payments_customer) and passes it back on later checkouts.
+  ensureCustomer(accountId: string, existingRef?: string | null): Promise<string>;
   createCheckout(
     kind: CheckoutKind,
     accountId: string,
     returnUrl: string,
+    // C4: attach the session to the patient's single customer so one-offs +
+    // subscription + portal all resolve to the same customer.
+    customerRef?: string | null,
   ): Promise<CheckoutSession>;
   getCheckoutStatus(sessionId: string): Promise<CheckoutResult>;
   createPortalSession(customerRef: string, returnUrl: string): Promise<PortalSession>;
