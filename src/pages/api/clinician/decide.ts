@@ -4,6 +4,11 @@ import { getClinicalCore, getDispensing, getEmail, getPayments } from '../../../
 import { ensureAccount } from '../../../lib/accounts';
 import { decideClinicianAction, type ClinicianAction } from '../../../lib/clinician/decide';
 import { dispenseIssuedScript } from '../../../lib/dispensing/dispense';
+import { flagsFromEnv } from '../../../lib/cta';
+import {
+  dispensingAwaitsMedicationPayment,
+  medicationBillingFromEnv,
+} from '../../../lib/medication/medication';
 
 // The clinician decision endpoint. Role-gated, then delegates to
 // decideClinicianAction where the hard line is enforced (clinician actor,
@@ -56,10 +61,21 @@ export const POST: APIRoute = async (ctx) => {
     );
 
     // On approve the script is issued (decide stops at rx_issued, the clinical
-    // decision). P4: the issued script now flows to dispensing (rx_issued ->
+    // decision). P4: the issued script flows to dispensing (rx_issued ->
     // dispensing) through the CloudRx adapter. Decision and transmission stay
     // separate functions; the route composes them.
-    if (result.action === 'approve' && result.rxId) {
+    //
+    // C5 (Journey F): when the purchase funnel is on AND medication is billed
+    // per-fill, dispensing WAITS for the patient to confirm + pay for their
+    // medication (advanceOnMedicationPaid), so we do NOT dispense inline here. Off
+    // (pre-CQC default) or bundled -> dispense inline exactly as before. This never
+    // touches rx_issued: the script is already issued; only its dispensing is deferred.
+    const flags = flagsFromEnv(env);
+    const awaitsMedication = dispensingAwaitsMedicationPayment(
+      flags,
+      medicationBillingFromEnv(env),
+    );
+    if (result.action === 'approve' && result.rxId && !awaitsMedication) {
       const dispensing = getDispensing(env, admin);
       await dispenseIssuedScript(
         admin,

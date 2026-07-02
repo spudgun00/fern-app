@@ -13,6 +13,11 @@ import { getClinicalCore, getDispensing } from '../lib/adapters/factory';
 import { ensureAccount, getJourney } from '../lib/accounts';
 import { getTreatmentView } from '../lib/dispensing/dispense';
 import { flagsFromEnv } from '../lib/cta';
+import { getProduct } from '../lib/checkout/products';
+import {
+  dispensingAwaitsMedicationPayment,
+  medicationBillingFromEnv,
+} from '../lib/medication/medication';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -42,6 +47,25 @@ const isMock = env.DISPENSING_IMPL !== 'stripe' && env.DISPENSING_IMPL !== 'clou
 // the purchase funnel is on. Off (pre-CQC default) hides them (the prescription
 // record + dispensing status remain visible; neither is purchase copy).
 const flags = flagsFromEnv(env);
+
+// C5 (Journey F): when medication is a per-fill charge and the funnel is on, a
+// clinician-issued script (rx_issued) waits for the patient to confirm + pay for
+// their medication before it is dispensed. Resolve the patient's medication
+// product under the flags (menopause is the primary door; weight only when
+// weightLossRx is on) — it names no medicine, so the copy stays POM-safe.
+const awaitsMedication = dispensingAwaitsMedicationPayment(flags, medicationBillingFromEnv(env));
+const medicationProduct =
+  getProduct('menopause_medication', flags) ?? getProduct('weight_medication', flags);
+const showMedicationConfirm =
+  flags.purchaseEnabled &&
+  awaitsMedication &&
+  journey?.state === 'rx_issued' &&
+  !view.dispense &&
+  Boolean(view.script) &&
+  Boolean(medicationProduct);
+// C5 (Journey G): the optional add-ons appear once treatment is under way
+// (a dispense exists). Both are ungated by any Rx flag; funnel-gated only.
+const showAddons = flags.purchaseEnabled && Boolean(view.dispense);
 ---
 
 <Layout title="Your treatment — Fern" navVariant="patient" user={user} active="/treatment" narrow>
@@ -89,6 +113,24 @@ const flags = flagsFromEnv(env);
               Issued {new Date(view.script.issuedAt).toLocaleString('en-GB')}
             </p>
           </div>
+
+          {showMedicationConfirm && medicationProduct && (
+            <div class="card confirm-card">
+              <div class="rx-head">
+                <h2>Confirm your medication</h2>
+                <span class="pill pill-soft">Demo stand-in</span>
+              </div>
+              <p class="muted repeat-copy">
+                Your clinician has prescribed your treatment. Confirm to arrange
+                dispensing and delivery from our pharmacy partner. The cost is passed
+                through at cost, with any prescriber fee where applicable. This pays
+                for dispensing; it does not change your prescription.
+              </p>
+              <a href={`/checkout?product=${medicationProduct.id}`} class="btn btn-pri">
+                Confirm your medication
+              </a>
+            </div>
+          )}
 
           <div class="card">
             <div class="rx-head">
@@ -138,6 +180,28 @@ const flags = flagsFromEnv(env);
                   request repeats reviewed by a clinician at no extra consultation charge.
                 </p>
               )}
+            </div>
+          )}
+
+          {showAddons && (
+            <div class="card addons-card">
+              <h2>Optional extras</h2>
+              <p class="muted repeat-copy">
+                Optional add-ons for your care. Neither is a medicine, and neither
+                changes your treatment.
+              </p>
+              <div class="addons">
+                <div class="addon">
+                  <span class="addon-name">Side-effect support kit</span>
+                  <span class="addon-desc">Comfort items for common early side effects, posted to you.</span>
+                  <a href="/checkout?product=addon_kit" class="btn btn-ghost">Add support kit</a>
+                </div>
+                <div class="addon">
+                  <span class="addon-name">Repeat health screen</span>
+                  <span class="addon-desc">Ongoing monitoring, every 6 to 12 months. A clinician reviews each result.</span>
+                  <a href="/checkout?product=rescreen" class="btn btn-ghost">Set up re-screen</a>
+                </div>
+              </div>
             </div>
           )}
 
@@ -199,6 +263,18 @@ const flags = flagsFromEnv(env);
   .track-desc { display: block; font-size: 14.5px; color: var(--text); margin-top: 2px; }
 
   .repeat-copy { margin-top: 6px; }
+
+  .confirm-card .btn { margin-top: 14px; }
+  .addons { display: grid; gap: 14px; margin-top: 14px; }
+  @media (min-width: 620px) { .addons { grid-template-columns: 1fr 1fr; } }
+  .addon {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 16px; background: var(--cream-2);
+    border: 1px solid var(--border); border-radius: 14px;
+  }
+  .addon-name { font-weight: 600; color: var(--navy); }
+  .addon-desc { color: var(--muted); font-size: 14px; line-height: 1.55; }
+  .addon .btn { margin-top: 8px; align-self: flex-start; }
 
   .dev-panel {
     margin-top: 20px;

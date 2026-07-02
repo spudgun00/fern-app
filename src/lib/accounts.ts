@@ -509,7 +509,17 @@ export async function setScreeningRefStatus(
 // those live with the provider (Stripe) behind the PaymentsAdapter. Used here
 // for the one-off consult fee; recurring membership state lives in `membership`.
 // ---------------------------------------------------------------------------
-export type PaymentKind = 'consult' | 'membership' | 'treatment';
+// C5 adds three kinds: 'medication' (Journey F pass-through, gates dispensing),
+// and the two Journey G add-ons — 'addon_kit' (side-effect kit, one-off) and
+// 'rescreen' (recurring re-screen). Kept in sync with the payment_kind enum
+// (migration 20260703000000) and CheckoutKind.
+export type PaymentKind =
+  | 'consult'
+  | 'membership'
+  | 'treatment'
+  | 'medication'
+  | 'addon_kit'
+  | 'rescreen';
 
 export interface PaymentRef {
   id: string;

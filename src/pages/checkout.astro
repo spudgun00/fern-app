@@ -34,10 +34,29 @@ const checkoutState = product ? await getProductCheckoutState(admin, account.id,
 const journey = product ? await getJourney(admin, account.id) : null;
 
 // On a completed payment the surface routes on: the consult sends the patient to
-// book (Journey C gates the full-lane booking); the treatment products send them
-// to their screening / completion.
+// book (Journey C gates the full-lane booking); medication sends them to their
+// treatment view (dispensing); the treatment products send them to their
+// screening / completion. Add-ons land back on the completion page.
 const paidHref =
-  product?.kind === 'consult' ? '/consult' : `/checkout/complete?product=${product?.id}`;
+  product?.kind === 'consult'
+    ? '/consult'
+    : product?.kind === 'medication'
+      ? '/treatment'
+      : `/checkout/complete?product=${product?.id}`;
+
+// The consent line depends on what the checkout arranges. Medication arranges
+// dispensing of an already-issued script; the add-ons arrange a fulfilment /
+// monitoring line; the screen / treatment arrange the at-home screen; the consult
+// books an assessment. All are category-level; none names a medicine.
+type ConsentKind = 'consult' | 'medication' | 'addon' | 'screen';
+const consentKind: ConsentKind =
+  product?.kind === 'consult'
+    ? 'consult'
+    : product?.kind === 'medication'
+      ? 'medication'
+      : product?.kind === 'addon_kit' || product?.kind === 'rescreen'
+        ? 'addon'
+        : 'screen';
 ---
 
 <Layout title="Checkout — Fern" navVariant="patient" user={user} narrow>
@@ -82,6 +101,10 @@ const paidHref =
 
           <p class="unlocks">{product.unlocks}</p>
 
+          {product.recurringNote && (
+            <p class="notice notice-soft pending-note">{product.recurringNote}</p>
+          )}
+
           {product.pendingTreatmentNote && (
             flags.menopauseRx ? (
               <p class="notice notice-soft pending-note">
@@ -109,12 +132,23 @@ const paidHref =
               <label class="consent">
                 <input type="checkbox" name="consent" required />
                 <span>
-                  {product.kind === 'consult' ? (
+                  {consentKind === 'consult' ? (
                     <>
                       I consent to Fern processing this checkout and booking my
                       consultation. I understand a clinician decides the next step at
                       the consultation, and that nothing is prescribed without that
                       assessment.
+                    </>
+                  ) : consentKind === 'medication' ? (
+                    <>
+                      I consent to Fern arranging dispensing and delivery of the
+                      treatment my clinician has already prescribed. I understand this
+                      pays for dispensing and does not change my prescription.
+                    </>
+                  ) : consentKind === 'addon' ? (
+                    <>
+                      I consent to Fern processing this checkout. I understand this is
+                      an optional extra and changes nothing about my treatment or my care.
                     </>
                   ) : (
                     <>

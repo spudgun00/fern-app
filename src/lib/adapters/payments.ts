@@ -11,9 +11,18 @@
 // The app DB stores provider pointers + status only.
 
 // The priced things: the one-off consult fee (menopause full lane) and the
-// recurring membership (both mode=payment / mode=subscription), plus the
-// pay-first weight treatment charge (mode=payment, weight roadmap P4).
-export type CheckoutKind = 'consult' | 'membership' | 'treatment';
+// recurring membership (both mode=payment / mode=subscription), the pay-first
+// weight treatment charge (mode=payment, weight roadmap P4), and the C5 charges —
+// the medication pass-through (Journey F, mode=payment) and the two add-ons
+// (Journey G): the side-effect support kit ('addon_kit', one-off) and the
+// recurring re-screen ('rescreen'). All one-offs except 'membership'.
+export type CheckoutKind =
+  | 'consult'
+  | 'membership'
+  | 'treatment'
+  | 'medication'
+  | 'addon_kit'
+  | 'rescreen';
 
 export interface CheckoutSession {
   // Opaque provider session id. Persisted app-side as a pointer only.

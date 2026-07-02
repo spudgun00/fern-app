@@ -20,7 +20,21 @@
 import type { CheckoutKind } from '../adapters/payments';
 import type { CtaFlags, FrontDoor } from '../cta';
 
-export type ProductId = 'menopause_screen' | 'weight_treatment' | 'consult';
+export type ProductId =
+  | 'menopause_screen'
+  | 'weight_treatment'
+  | 'consult'
+  | 'menopause_medication'
+  | 'weight_medication'
+  | 'addon_kit'
+  | 'rescreen';
+
+// A flag that gates a product's very existence: with it off getProduct returns
+// null so no priced / drug-adjacent copy for that product renders anywhere. The
+// weight door is gated by weightLossRx; the menopause medication (the C6 HRT
+// layer) by menopauseRx. Screen / consult / add-ons are ungated (they never name
+// a medicine), controlled only by the purchase funnel (purchaseEnabled).
+export type ProductGate = 'weightLossRx' | 'menopauseRx';
 
 export interface LineItem {
   label: string;
@@ -34,8 +48,11 @@ export interface Product {
   // C2 products (screen / weight) transmit through the pay-first one-off
   // 'treatment' kind (so the P4 refund covers them + the kit is ordered on pay).
   // C3 adds the 'consult' one-off (Journey C, ~£100), which instead gates the
-  // full-lane booking (consult_booked). The surface branches on this.
-  kind: Extract<CheckoutKind, 'treatment' | 'consult'>;
+  // full-lane booking (consult_booked). C5 adds 'medication' (Journey F, gates
+  // rx_issued -> dispensing), 'addon_kit' + 'rescreen' (Journey G). The surface
+  // branches on this. All product kinds are one-offs (membership is not a product
+  // descriptor — it is the subscription, handled by billing.ts).
+  kind: Exclude<CheckoutKind, 'membership'>;
   title: string;
   // The real, single-figure price shown at checkout (working figures; the finance
   // /compliance pass locks them). Kept as a display string; the app DB never
@@ -50,8 +67,16 @@ export interface Product {
   // Journey A only: the labelled placeholder for the post-approval treatment step
   // whose catalogue is not built until C6. Never a drug name.
   pendingTreatmentNote?: string;
-  // True when this product is gated behind weightLossRx (the weight door).
-  requiresRx: boolean;
+  // The flag that gates this product's existence (see ProductGate). Undefined for
+  // ungated products (screen, consult, add-ons).
+  gatedBy?: ProductGate;
+  // C5 (Journey F): this is a pass-through charge for a POM the clinician already
+  // prescribed — it pays for dispensing, it does not prescribe. Drives the surface
+  // copy ("passed through from our pharmacy partner"). Category-level only.
+  passThrough?: boolean;
+  // C5 (Journey G): a recurring charge cadence shown to the patient (e.g. the
+  // 6/12-month re-screen). A display note only; the mock completes it as a one-off.
+  recurringNote?: string;
 }
 
 // The working screen price (shared across both doors — it is the same Midlife
@@ -78,7 +103,6 @@ export const PRODUCTS: Record<ProductId, Product> = {
       'We post your at-home screening kit. Once your results are in, a clinician reviews them before any treatment is discussed.',
     pendingTreatmentNote:
       'Treatment step — pending menopause catalogue (phase C6). No treatment is chosen or charged here.',
-    requiresRx: false,
   },
   // Journey B — treatment-first (weight), behind weightLossRx. The screen is
   // bundled and credited. Category-level copy only; no medicine names.
@@ -101,7 +125,7 @@ export const PRODUCTS: Record<ProductId, Product> = {
     ],
     unlocks:
       'We post your at-home screening kit. Once your results are in, a clinician reviews them and decides the safe next step. Nothing is prescribed without that review.',
-    requiresRx: true,
+    gatedBy: 'weightLossRx',
   },
   // Journey C — the 1:1 video consultation (~£100), an upsell or, where the
   // compliance pass makes it mandatory, the required step to initiate treatment.
@@ -122,18 +146,120 @@ export const PRODUCTS: Record<ProductId, Product> = {
     ],
     unlocks:
       'Once paid, you can book your consultation slot. The clinician decides the next step at the consult. Nothing is prescribed without that assessment.',
-    requiresRx: false,
+  },
+  // Journey F — medication (menopause). A PASS-THROUGH charge for the treatment a
+  // clinician has ALREADY prescribed: paying it arranges dispensing, it does not
+  // prescribe. Gated behind menopauseRx (the C6 HRT layer) so no medicine copy
+  // renders while it is off. Category-level only: never a medicine name. The price
+  // is a single figure (VAT position is open decision #6 — do not add a VAT line).
+  menopause_medication: {
+    id: 'menopause_medication',
+    door: 'menopause',
+    kind: 'medication',
+    title: 'Your prescribed treatment',
+    price: '£XX*',
+    framing:
+      'The cost of the treatment your clinician has prescribed, passed through from our pharmacy partner. This arranges dispensing; it is not a new prescription.',
+    lineItems: [
+      {
+        label: 'Your prescribed treatment (dispensed by our pharmacy partner)',
+        note: 'passed through at cost',
+      },
+      {
+        label: 'Prescriber fee',
+        note: 'where applicable',
+      },
+    ],
+    unlocks:
+      'Once paid, your clinician-issued prescription is sent to our pharmacy partner for dispensing and delivery. Nothing about your prescription changes here.',
+    gatedBy: 'menopauseRx',
+    passThrough: true,
+  },
+  // Journey F — medication (weight). The weight-door counterpart, gated behind
+  // weightLossRx so no medicine copy renders while that door is off. Same
+  // pass-through, dispensing-only model; category-level copy only.
+  weight_medication: {
+    id: 'weight_medication',
+    door: 'weight',
+    kind: 'medication',
+    title: 'Your prescribed treatment',
+    price: '£XX*',
+    framing:
+      'The cost of the treatment your clinician has prescribed, passed through from our pharmacy partner. This arranges dispensing; it is not a new prescription.',
+    lineItems: [
+      {
+        label: 'Your prescribed treatment (dispensed by our pharmacy partner)',
+        note: 'passed through at cost',
+      },
+      {
+        label: 'Prescriber fee',
+        note: 'where applicable',
+      },
+    ],
+    unlocks:
+      'Once paid, your clinician-issued prescription is sent to our pharmacy partner for dispensing and delivery. Nothing about your prescription changes here.',
+    gatedBy: 'weightLossRx',
+    passThrough: true,
+  },
+  // Journey G — side-effect support kit. A one-off fulfilment line item (comfort
+  // items for common early side effects). Ungated by any Rx flag (it names no
+  // medicine); available only inside the purchase funnel. No clinical state is
+  // touched by buying it.
+  addon_kit: {
+    id: 'addon_kit',
+    door: 'both',
+    kind: 'addon_kit',
+    title: 'Side-effect support kit',
+    price: '£25*',
+    framing:
+      'An optional kit of comfort items that can help with common early side effects. Not a medicine, and not required.',
+    lineItems: [
+      {
+        label: 'Side-effect support kit',
+        note: 'posted to you',
+      },
+    ],
+    unlocks:
+      'Once paid, we post your support kit. This is an optional extra; it changes nothing about your treatment or your care.',
+  },
+  // Journey G — 6/12-month re-screen. A RECURRING screen charge for ongoing
+  // monitoring, reusing the screen product's framing. Ungated by any Rx flag (it
+  // names no medicine); available only inside the purchase funnel. It records a
+  // recurring monitoring charge and never touches the prescription path.
+  rescreen: {
+    id: 'rescreen',
+    door: 'both',
+    kind: 'rescreen',
+    title: 'Repeat health screen',
+    price: '£49*',
+    framing:
+      'A repeat at-home health screen for ongoing monitoring, every 6 to 12 months. A health screen, not a diagnosis.',
+    lineItems: [
+      {
+        label: 'Repeat health screen (at-home blood test)',
+        note: 'for ongoing monitoring',
+      },
+    ],
+    unlocks:
+      'This sets up your regular monitoring screen. A clinician reviews each result; nothing about your prescription changes here.',
+    recurringNote: 'Billed every 6 to 12 months for ongoing monitoring.',
   },
 };
 
 // Resolve a product under the current flags. Returns null when:
 //   * the id is unknown, or
-//   * the product needs weightLossRx and it is off (so no weight-door copy leaks).
+//   * the product is gated by a flag (weightLossRx / menopauseRx) that is off, so
+//     no drug-adjacent copy for that product ever leaks.
 // The /checkout surface uses this: a null result renders the neutral waitlist /
-// not-available state, never any priced or drug-adjacent copy.
-export function getProduct(id: string, flags: Pick<CtaFlags, 'weightLossRx'>): Product | null {
+// not-available state, never any priced or drug-adjacent copy. menopauseRx is
+// optional in the flags arg so C2 call sites (which only pass weightLossRx) keep
+// working; an absent flag reads as off, so a menopause-gated product stays hidden.
+export function getProduct(
+  id: string,
+  flags: Pick<CtaFlags, 'weightLossRx'> & Partial<Pick<CtaFlags, 'menopauseRx'>>,
+): Product | null {
   const product = (PRODUCTS as Record<string, Product>)[id];
   if (!product) return null;
-  if (product.requiresRx && !flags.weightLossRx) return null;
+  if (product.gatedBy && !flags[product.gatedBy]) return null;
   return product;
 }

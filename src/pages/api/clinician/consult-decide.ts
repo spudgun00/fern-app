@@ -4,6 +4,11 @@ import { getClinicalCore, getDispensing, getEmail, getPayments } from '../../../
 import { ensureAccount } from '../../../lib/accounts';
 import { decideConsultAction, type ConsultAction } from '../../../lib/clinician/consult';
 import { dispenseIssuedScript } from '../../../lib/dispensing/dispense';
+import { flagsFromEnv } from '../../../lib/cta';
+import {
+  dispensingAwaitsMedicationPayment,
+  medicationBillingFromEnv,
+} from '../../../lib/medication/medication';
 
 // The full-lane clinician decision endpoint. Role-gated, then delegates to
 // decideConsultAction where the hard line is enforced (clinician actor, booked
@@ -62,7 +67,16 @@ export const POST: APIRoute = async (ctx) => {
     // decision). The issued script then flows to dispensing (rx_issued ->
     // dispensing) through the CloudRx adapter — the same dispense function the
     // fast lane uses. Decision and transmission stay separate; the route composes.
-    if (result.action === 'issue' && result.rxId) {
+    //
+    // C5 (Journey F): when the purchase funnel is on AND medication is billed
+    // per-fill, dispensing WAITS for the medication payment (advanceOnMedicationPaid);
+    // off or bundled -> dispense inline as before. Never touches rx_issued.
+    const flags = flagsFromEnv(env);
+    const awaitsMedication = dispensingAwaitsMedicationPayment(
+      flags,
+      medicationBillingFromEnv(env),
+    );
+    if (result.action === 'issue' && result.rxId && !awaitsMedication) {
       const dispensing = getDispensing(env, admin);
       await dispenseIssuedScript(
         admin,

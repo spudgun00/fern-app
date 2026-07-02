@@ -1294,10 +1294,69 @@ drug layer — the products the Journey-A placeholder pointed at.
   headings + patient-facing names + the safety check), placeholder absent, and the precise
   clinician-facing names do NOT appear on the patient page. `.dev.vars` reverted to `false`;
   `astro build` clean.
-- **Checkout roadmap after C6:** C1–C4 + C6 done + green (191 tests). **C5** (medication
-  payment F + add-ons G) remains — the only checkout phase left. Real drug strings render
+- **Checkout roadmap after C6:** C1–C6 now done + green (204 tests). Real drug strings render
   only behind `menopauseRx`/`weightLossRx`; real Stripe + real clinical core go live only on
   CQC + clinical lead + compliance sign-off.
+
+## Checkout C5 done (medication payment F + add-ons G — the last checkout phase, test mode)
+
+Built 2026-07-03 on `d2-patient-surfaces`, mock/test-mode (`PAYMENTS_IMPL=mock`), keyless,
+proven by mock like every prior money phase. Committed locally, **NOT pushed**. Spec:
+`../fern/docs/fern-checkout-build-spec.md` §5 F/G + §10 (open decisions #4, #6).
+
+- **THE HARD LINE (the load-bearing assertion):** a medication payment NEVER reaches
+  `rx_issued`. `rx_issued` is a **precondition** of the medication gate, not a result — the
+  script already exists from the clinician action (`decideClinicianAction`). Journey F only
+  advances `rx_issued → dispensing` (via the shared `dispenseIssuedScript`, which the machine
+  bars from any non-`rx_issued` state). `RX_ISSUED_PREDECESSORS` stays `['approved',
+  'consult_done']`; the 3 hard-line tests are **unchanged and green**.
+- **Journey F — medication (`src/lib/medication/medication.ts`).** The POM the clinician
+  already prescribed is dispensed via CloudRx as a **pass-through** charge (at cost + optional
+  prescriber margin). `advanceOnMedicationPaid(...)` is THE GATE: at `rx_issued` + covered →
+  dispense the pre-existing script; idempotent (state guard), never advances toward
+  `rx_issued`. `finaliseMedicationCheckout` is the return-page path (flip pending → paid on
+  the live provider status, then run the gate). Descriptors `menopause_medication` (gated by
+  `menopauseRx`) + `weight_medication` (gated by `weightLossRx`) reuse the C2 `/checkout`
+  surface; **category-level copy only, never a medicine name** even with the flag on.
+- **Open decision #4 (per-fill vs bundled), kept as config — NOT hard-coded.** New env
+  `MEDICATION_BILLING = 'per_fill'` (default; a separate pass-through charge — dispensing
+  waits for the medication payment) `| 'bundled'` (no separate charge; an active member's
+  dispensing proceeds). `dispensingAwaitsMedicationPayment(flags, billing)` = purchase funnel
+  on **and** per-fill: only then do the clinician routes (`/api/clinician/decide` +
+  `consult-decide`) DEFER inline dispensing to the medication payment. Off (pre-CQC default)
+  or bundled → dispense inline exactly as before, so **no existing flow changes while the
+  funnel is off**.
+- **Journey G — add-ons (`src/lib/addons/addons.ts`).** `addon_kit` (one-off side-effect
+  support kit, a fulfilment line) + `rescreen` (recurring 6/12-month monitoring re-screen,
+  reuses the screen framing). Both ride the shared checkout, are gated by `purchaseEnabled`
+  ONLY (no Rx flag, no medicine names), and touch **NO clinical state** — buying one records
+  a `payment_ref` + `checkout_consent` and nothing else (journey state, scripts, dispense all
+  unchanged — asserted).
+- **One customer per patient** (the C4 `ensureCustomer` / `payments_customer` path) covers
+  the medication + add-on charges too: a prior consult charge and a later medication charge
+  share one provider customer (proven).
+- **VAT (open decision #6):** prices stay single-figure (`£XX*` / `£25*` / `£49*`), with **no
+  VAT line and no inc/ex-VAT claim** — resolve at the finance pass.
+- **DB:** one additive migration `20260703000000_c5_medication_addons.sql` — three new
+  `payment_kind` enum values (`medication`, `addon_kit`, `rescreen`). **Pushed to the linked
+  dev DB** (`supabase db push`) so the tests' inserts resolve; no table change, no card data,
+  no PII, no Article 9.
+- **Proven (`test/c5-medication.test.ts`, 13; 191 → 204):** pay medication (per_fill) →
+  `dispensing`, rx_issued pre-existed via the clinician; the gate no-ops before `rx_issued`;
+  per_fill vs bundled toggle (unpaid no-op / paid dispenses; bundled member dispenses with no
+  charge, non-member no-op); medication rides the same customer as an earlier consult; add-on
+  kit + re-screen record a paid line with journey + scripts unchanged; copy discipline (no C5
+  descriptor names a medicine or says "free"; menopause/weight medication resolve ONLY behind
+  their Rx flag; add-ons resolve regardless). `astro build` clean. Full suite green run
+  serialized (`--no-file-parallelism`) — the remote dev DB times out under full file
+  parallelism, an infra limit, not a code failure.
+- **Render walk (RENDER not dist grep — `output: 'server'`):** throwaway signup, GET
+  `/checkout?product=menopause_medication`. **Flag OFF** (defaults) → 200, waitlist CTA, **zero**
+  drug/medication/price/pass-through terms. **Flag ON** (`.dev.vars` flipped, restart) → the
+  medication descriptor renders ("Your prescribed treatment", `£XX`, "passed through at cost",
+  "pharmacy partner", "Prescriber fee", "Demo stand-in") with **zero** HRT drug names; and
+  `weight_medication` with `weightLossRx` off → "Not available". `.dev.vars` reverted to
+  flags-off.
 
 ## Verifying
 

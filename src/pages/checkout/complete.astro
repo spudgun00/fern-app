@@ -9,11 +9,13 @@
 // state, never a script. A clinician still decides once the bloods are in.
 import Layout from '../../layouts/Layout.astro';
 import { createAdminClient } from '../../lib/supabase/admin';
-import { getPayments, getScreening } from '../../lib/adapters/factory';
+import { getClinicalCore, getDispensing, getEmail, getPayments, getScreening } from '../../lib/adapters/factory';
 import { ensureAccount, getJourney, hasPaidConsult } from '../../lib/accounts';
 import { flagsFromEnv } from '../../lib/cta';
 import { finaliseTreatmentCheckout } from '../../lib/checkout/checkout';
 import { finaliseLatestPending } from '../../lib/payments/billing';
+import { finaliseMedicationCheckout, medicationBillingFromEnv } from '../../lib/medication/medication';
+import { finaliseAddonCheckout, type AddonKind } from '../../lib/addons/addons';
 import { getProduct } from '../../lib/checkout/products';
 
 const { user, env } = Astro.locals;
@@ -25,10 +27,15 @@ if (account.role === 'clinician') return Astro.redirect('/clinician');
 
 const flags = flagsFromEnv(env);
 const product = getProduct(Astro.url.searchParams.get('product') ?? '', flags);
-const isConsult = product?.kind === 'consult';
+const kind = product?.kind;
+const isConsult = kind === 'consult';
+const isMedication = kind === 'medication';
+const isAddon = kind === 'addon_kit' || kind === 'rescreen';
 
 let problem: string | null = null;
 let gate: Awaited<ReturnType<typeof finaliseTreatmentCheckout>> | null = null;
+let medGate: Awaited<ReturnType<typeof finaliseMedicationCheckout>> | null = null;
+let addonPaid = false;
 let consultPaid = false;
 if (flags.purchaseEnabled) {
   try {
@@ -38,6 +45,23 @@ if (flags.purchaseEnabled) {
       // full-lane booking; the patient books next. No screening gate here.
       await finaliseLatestPending(admin, payments, account.id);
       consultPaid = await hasPaidConsult(admin, account.id);
+    } else if (isMedication && account.core_patient_id) {
+      // Journey F: finalise the medication pass-through, then advance rx_issued ->
+      // dispensing (the script pre-exists from the clinician). Never touches rx_issued.
+      medGate = await finaliseMedicationCheckout(
+        admin,
+        payments,
+        getClinicalCore(env, admin),
+        getDispensing(env, admin),
+        account.id,
+        account.core_patient_id,
+        medicationBillingFromEnv(env),
+        { email: getEmail(env, admin), baseUrl: new URL(Astro.request.url).origin },
+      );
+    } else if (isAddon) {
+      // Journey G: record the add-on fulfilment / monitoring line. No clinical state.
+      const result = await finaliseAddonCheckout(admin, payments, account.id, kind as AddonKind);
+      addonPaid = result.paid;
     } else if (account.core_patient_id) {
       const screening = getScreening(env, admin);
       gate = await finaliseTreatmentCheckout(admin, payments, screening, account.id, account.core_patient_id);
@@ -48,11 +72,18 @@ if (flags.purchaseEnabled) {
 }
 
 const journey = await getJourney(admin, account.id);
-const paid = isConsult ? consultPaid : gate?.paymentStatus === 'paid';
+const paid = isConsult
+  ? consultPaid
+  : isMedication
+    ? medGate?.covered === true
+    : isAddon
+      ? addonPaid
+      : gate?.paymentStatus === 'paid';
 const onScreening =
   journey?.state === 'screening_kit_sent' ||
   journey?.state === 'sample_received' ||
   journey?.state === 'results_ready';
+const onDispensing = journey?.state === 'dispensing' || journey?.state === 'delivered';
 ---
 
 <Layout title="Payment — Fern" navVariant="patient" user={user} narrow>
@@ -77,7 +108,30 @@ const onScreening =
         </>
       )}
 
-      {paid && !isConsult && onScreening && (
+      {paid && isMedication && (
+        <>
+          <span class="pill">Paid</span>
+          <p>
+            Thank you. Your treatment is being sent to our pharmacy partner for
+            dispensing and delivery. Your prescription has not changed; this
+            arranges its dispensing. You can follow progress on your treatment page.
+          </p>
+          <a href="/treatment" class="btn btn-pri">Track your treatment</a>
+        </>
+      )}
+
+      {paid && isAddon && (
+        <>
+          <span class="pill">Paid</span>
+          <p>
+            Thank you. Your order is confirmed. This is an optional extra and
+            nothing about your treatment or your care has changed.
+          </p>
+          <a href="/treatment" class="link">Back to your treatment</a>
+        </>
+      )}
+
+      {paid && !isConsult && !isMedication && !isAddon && onScreening && (
         <>
           <span class="pill">Paid</span>
           <p>
@@ -89,7 +143,7 @@ const onScreening =
         </>
       )}
 
-      {paid && !isConsult && !onScreening && (
+      {paid && !isConsult && !isMedication && !isAddon && !onScreening && (
         <>
           <span class="pill">Paid</span>
           <p>Your payment is confirmed. We will be in touch with your next step.</p>

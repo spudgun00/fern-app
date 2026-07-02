@@ -65,6 +65,16 @@ export interface AppEnv {
   // is a preference only; a clinician still issues every script. Non-secret var.
   MENOPAUSE_RX_ENABLED: boolean;
   WAITLIST_URL: string;
+  // Checkout C5 — the medication (Journey F) billing model. Open decision #4 in
+  // the checkout spec: the POM is a pass-through (CloudRx) charge that can be
+  // billed EITHER as a separate per-fill charge ('per_fill', the default —
+  // dispensing waits for the medication payment) OR bundled into the membership
+  // ('bundled' — no separate charge; an active member's dispensing proceeds). Kept
+  // as a flag so the pricing model decides it WITHOUT a code change; never
+  // hard-coded. Non-secret var. It never weakens the hard line: either way a
+  // clinician issues every script, and the charge gates rx_issued -> dispensing
+  // only (never rx_issued itself).
+  MEDICATION_BILLING: 'per_fill' | 'bundled';
   // Checkout C3 — the GLP initiation routing switch. Whether a weight (GLP)
   // patient whose screening is in must have a 1:1 CONSULT to initiate treatment
   // (true), or may be initiated ASYNC on a clinician's sign-off of the bloods
@@ -124,6 +134,10 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const weightLossRx = boolFlag(get('WEIGHTLOSS_RX_ENABLED'));
   const menopauseRx = boolFlag(get('MENOPAUSE_RX_ENABLED'));
   const glpConsultRequired = boolFlag(get('GLP_CONSULT_REQUIRED'));
+  // Open decision #4: default per_fill (a separate pass-through charge). Only the
+  // exact string 'bundled' selects the membership-bundled model.
+  const medicationBilling: AppEnv['MEDICATION_BILLING'] =
+    String(get('MEDICATION_BILLING') ?? '').toLowerCase() === 'bundled' ? 'bundled' : 'per_fill';
   const waitlistUrl = get('WAITLIST_URL');
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
@@ -214,5 +228,6 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     MENOPAUSE_RX_ENABLED: menopauseRx,
     WAITLIST_URL: waitlistUrl != null && String(waitlistUrl) ? String(waitlistUrl) : DEFAULT_WAITLIST_URL,
     GLP_CONSULT_REQUIRED: glpConsultRequired,
+    MEDICATION_BILLING: medicationBilling,
   };
 }
