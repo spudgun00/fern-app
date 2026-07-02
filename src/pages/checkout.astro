@@ -1,0 +1,157 @@
+---
+// Checkout C2 — the shared one-off checkout surface (journeys A + B), driven by a
+// product descriptor. Renders the line items, the price, the framing, a mandatory
+// consent, and the pay action. The same surface serves the menopause screen and
+// the weight programme; the descriptor drives the difference, not copied pages.
+//
+// HARD LINE (render-clean when off): with the purchase funnel off (pre-CQC
+// default) this page shows ONLY the waitlist CTA — no price, no product, no
+// drug-adjacent copy. With weightLossRx off the weight product does not resolve,
+// so its assessment/treatment copy never renders. All copy is category-level; no
+// medicine names anywhere; the screen is never "free".
+import Layout from '../layouts/Layout.astro';
+import WaitlistCta from '../components/WaitlistCta.astro';
+import { createAdminClient } from '../lib/supabase/admin';
+import { ensureAccount, getJourney } from '../lib/accounts';
+import { flagsFromEnv } from '../lib/cta';
+import { getProduct } from '../lib/checkout/products';
+import { getTreatmentCheckoutState } from '../lib/checkout/checkout';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+
+const flags = flagsFromEnv(env);
+const productId = Astro.url.searchParams.get('product') ?? '';
+const error = Astro.url.searchParams.get('error');
+
+// Resolve only when the purchase funnel is on. Off -> render the waitlist only.
+const product = flags.purchaseEnabled ? getProduct(productId, flags) : null;
+const checkoutState = product ? await getTreatmentCheckoutState(admin, account.id) : null;
+const journey = product ? await getJourney(admin, account.id) : null;
+---
+
+<Layout title="Checkout — Fern" navVariant="patient" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Your care</span>
+      <h1>Checkout</h1>
+    </div>
+
+    {error && <p class="notice notice-error top-notice">{error}</p>}
+
+    {!flags.purchaseEnabled && <WaitlistCta href={flags.waitlistUrl} />}
+
+    {flags.purchaseEnabled && !product && (
+      <div class="card step-card stack">
+        <span class="pill pill-soft">Not available</span>
+        <p class="muted">This checkout is not available. Return to your account and pick up your next step there.</p>
+        <a href="/dashboard" class="link">Back to your dashboard</a>
+      </div>
+    )}
+
+    {flags.purchaseEnabled && product && (
+      <>
+        <div class="card product-card top-notice">
+          <div class="prod-head">
+            <div>
+              <span class="pill pill-soft">Demo stand-in</span>
+              <h2>{product.title}</h2>
+              <p class="framing">{product.framing}</p>
+            </div>
+            <span class="amount">{product.price}</span>
+          </div>
+
+          <ul class="lines">
+            {product.lineItems.map((li) => (
+              <li>
+                <span class="li-label">{li.label}</span>
+                {li.note && <span class="li-note">{li.note}</span>}
+              </li>
+            ))}
+          </ul>
+
+          <p class="unlocks">{product.unlocks}</p>
+
+          {product.pendingTreatmentNote && (
+            <p class="notice notice-soft pending-note">{product.pendingTreatmentNote}</p>
+          )}
+
+          {checkoutState?.paid ? (
+            <div class="state-row">
+              <span class="pill">Paid</span>
+              <a href={`/checkout/complete?product=${product.id}`} class="btn btn-pri">Continue</a>
+            </div>
+          ) : (
+            <form method="POST" action="/api/checkout/start" class="pay-form">
+              <input type="hidden" name="product" value={product.id} />
+              {checkoutState?.pending && (
+                <p class="notice notice-soft pending-note">
+                  A previous payment is still being confirmed. Reload after paying.
+                </p>
+              )}
+              <label class="consent">
+                <input type="checkbox" name="consent" required />
+                <span>
+                  I consent to Fern processing this checkout and posting my at-home
+                  screening kit. I understand a clinician reviews my results before
+                  any treatment is discussed, and that this screen is not a diagnosis.
+                </span>
+              </label>
+              <button type="submit" class="btn btn-pri btn-block pay">Pay {product.price}</button>
+              <p class="soft demo-note">
+                No card details are entered or stored here. The live payment uses the
+                provider's secure checkout.
+              </p>
+            </form>
+          )}
+        </div>
+
+        <p class="soft devline">
+          <span class="dev-tag">Demo detail</span>
+          product <code>{product.id}</code> &middot; payment <code>{checkoutState?.status ?? 'none'}</code>
+          &middot; state <code>{journey?.state}</code>
+        </p>
+      </>
+    )}
+  </div>
+</Layout>
+
+<style>
+  .top-notice { margin-top: 24px; }
+  .step-card { margin-top: 24px; }
+  .step-card .btn { align-self: flex-start; }
+
+  .prod-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .prod-head h2 { font-size: 22px; margin-top: 8px; }
+  .framing { color: var(--muted); font-size: 14.5px; margin-top: 6px; }
+  .amount { font-family: var(--disp); font-size: 26px; font-weight: 600; color: var(--navy); white-space: nowrap; }
+
+  .lines { list-style: none; margin: 16px 0 0; padding: 16px 0 0; border-top: 1px solid var(--border); }
+  .lines li { display: flex; flex-direction: column; padding: 8px 0; }
+  .li-label { font-size: 15px; color: var(--text); }
+  .li-note { font-size: 13px; color: var(--soft); }
+
+  .unlocks { margin-top: 16px; color: var(--muted); font-size: 14.5px; line-height: 1.7; }
+  .pending-note { margin-top: 16px; }
+
+  .state-row { display: flex; align-items: center; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+  .pay-form { margin-top: 20px; }
+  .consent { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+  .consent input { margin-top: 3px; }
+  .pay { margin-top: 18px; }
+  .demo-note { margin-top: 12px; text-align: center; font-size: 12.5px; }
+
+  .devline { margin-top: 22px; font-size: 12.5px; }
+  .dev-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--faint); margin-right: 8px;
+  }
+  code { font-family: var(--mono); font-size: 12.5px; }
+</style>

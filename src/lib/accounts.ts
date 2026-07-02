@@ -600,6 +600,48 @@ export async function hasPaidTreatment(db: SupabaseClient, accountId: string): P
 }
 
 // ---------------------------------------------------------------------------
+// Checkout consent pointer (checkout C2). checkout_consent records ONLY that a
+// patient gave explicit consent at a checkout, when, for which product, and a
+// pointer to the provider session it was captured against. The waitlist consent
+// discipline, applied to the pay-first one-off checkout. NO card data, NO PII,
+// NO clinical content.
+// ---------------------------------------------------------------------------
+export interface CheckoutConsent {
+  id: string;
+  account_id: string;
+  product: string;
+  provider_ref: string | null;
+  created_at: string;
+}
+
+export async function recordCheckoutConsent(
+  db: SupabaseClient,
+  accountId: string,
+  product: string,
+  providerRef: string | null,
+): Promise<void> {
+  const { error } = await db
+    .from('checkout_consent')
+    .insert({ account_id: accountId, product, provider_ref: providerRef });
+  if (error) throw new Error(`recordCheckoutConsent: ${error.message}`);
+}
+
+export async function getLatestCheckoutConsent(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<CheckoutConsent | null> {
+  const { data, error } = await db
+    .from('checkout_consent')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestCheckoutConsent: ${error.message}`);
+  return (data as CheckoutConsent) ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Membership pointer (P5). membership holds ONLY the provider customer +
 // subscription pointers and a coarse billing status (inactive | active |
 // canceled). NO card data, NO PII. status === 'active' is what drives member

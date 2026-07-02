@@ -12,7 +12,15 @@ const session = Astro.url.searchParams.get('session') ?? '';
 const kind = Astro.url.searchParams.get('kind') ?? 'consult';
 const ret = Astro.url.searchParams.get('return') ?? '/account/billing/complete';
 
-const label = kind === 'membership' ? 'Membership (£18/mo)' : 'Consultation fee (£100)';
+// The line label per checkout kind. 'treatment' (the pay-first one-off, C2) is
+// kept POM-safe and neutral here — this stand-in does not know the product
+// descriptor, and no medicine name ever appears in a checkout line.
+const label =
+  kind === 'membership'
+    ? 'Membership (£18/mo)'
+    : kind === 'treatment'
+      ? 'Your Fern programme (includes your health screen)'
+      : 'Consultation fee (£100)';
 ---
 
 <Layout title="Checkout — Fern" navVariant="patient" user={user} narrow>

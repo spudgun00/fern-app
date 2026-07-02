@@ -1,0 +1,104 @@
+---
+// Checkout C2 — the return page from the payment provider (and the mock checkout).
+// Finalises the in-flight treatment checkout (marks the pending session paid by
+// reading the live provider status) and runs THE GATE: a paid treatment payment
+// advances intake_submitted -> screening_kit_sent (orders the shared screening
+// kit). For Stripe the webhook is authoritative; this poll is idempotent with it.
+//
+// HARD LINE: the gate advances to the screening branch ONLY — never a decision
+// state, never a script. A clinician still decides once the bloods are in.
+import Layout from '../../layouts/Layout.astro';
+import { createAdminClient } from '../../lib/supabase/admin';
+import { getPayments, getScreening } from '../../lib/adapters/factory';
+import { ensureAccount, getJourney } from '../../lib/accounts';
+import { flagsFromEnv } from '../../lib/cta';
+import { finaliseTreatmentCheckout } from '../../lib/checkout/checkout';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+
+const flags = flagsFromEnv(env);
+
+let problem: string | null = null;
+let gate: Awaited<ReturnType<typeof finaliseTreatmentCheckout>> | null = null;
+if (flags.purchaseEnabled && account.core_patient_id) {
+  try {
+    const payments = getPayments(env, admin);
+    const screening = getScreening(env, admin);
+    gate = await finaliseTreatmentCheckout(admin, payments, screening, account.id, account.core_patient_id);
+  } catch (err) {
+    problem = err instanceof Error ? err.message : String(err);
+  }
+}
+
+const journey = await getJourney(admin, account.id);
+const paid = gate?.paymentStatus === 'paid';
+const onScreening =
+  journey?.state === 'screening_kit_sent' ||
+  journey?.state === 'sample_received' ||
+  journey?.state === 'results_ready';
+---
+
+<Layout title="Payment — Fern" navVariant="patient" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack">
+      <span class="eyebrow">Your care</span>
+      <h1>Payment</h1>
+    </div>
+
+    <div class="card step-card stack">
+      {problem && <p class="notice notice-error">{problem}</p>}
+
+      {paid && onScreening && (
+        <>
+          <span class="pill">Paid</span>
+          <p>
+            Thank you. Your payment is confirmed and we are posting your at-home
+            screening kit. Once your results are in, a clinician reviews them
+            before any treatment is discussed. Nothing has been prescribed.
+          </p>
+          <a href="/screening" class="btn btn-pri">Track your screening</a>
+        </>
+      )}
+
+      {paid && !onScreening && (
+        <>
+          <span class="pill">Paid</span>
+          <p>Your payment is confirmed. We will be in touch with your next step.</p>
+          <a href="/dashboard" class="link">Back to your dashboard</a>
+        </>
+      )}
+
+      {!paid && !problem && (
+        <>
+          <span class="pill pill-soft">Confirming</span>
+          <p class="muted">
+            Your payment is being confirmed. This can take a moment; reload this
+            page.
+          </p>
+        </>
+      )}
+    </div>
+
+    <p class="soft devline">
+      <span class="dev-tag">Demo detail</span>
+      payment <code>{gate?.paymentStatus ?? 'none'}</code> &middot; state <code>{journey?.state}</code>
+    </p>
+  </div>
+</Layout>
+
+<style>
+  .step-card { margin-top: 24px; }
+  .step-card .pill { align-self: flex-start; }
+  .step-card .btn { align-self: flex-start; }
+  .devline { margin-top: 18px; font-size: 12.5px; }
+  .dev-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--faint); margin-right: 8px;
+  }
+  code { font-family: var(--mono); font-size: 12.5px; }
+</style>

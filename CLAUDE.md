@@ -1061,6 +1061,71 @@ NO Stripe, NO checkout surface added — this is the CTA switch + its wiring.
 - **Next:** C2 builds the shared one-off checkout (journeys A + B) over
   `startCheckout('treatment', …)` in Stripe test mode.
 
+## Checkout C2 done (shared one-off checkout — journeys A + B, pay-first, test mode)
+
+Checkout roadmap C2 (spec `../fern/docs/fern-checkout-build-spec.md` s5 A/B + the C2
+prompt). Built + proven by `npm test` (165 passed, 155 -> 165; +10 C2 tests) + a
+live render walk (dev server, flags off then on). NOT deployed. All payments run the
+MOCK provider (`PAYMENTS_IMPL=mock`); the Stripe path stays test-mode-ready but
+keyless (proven-by-mock, the same discipline every money phase used).
+
+- **One `/checkout` surface, one product descriptor.** `src/lib/checkout/products.ts`
+  holds the descriptor catalogue: **`menopause_screen`** (Journey A — Midlife Health
+  Screen, real `£49`, framed "worth £49, credited to your treatment", a labelled
+  **placeholder** for the post-approval treatment step "pending menopause catalogue
+  (C6)" — never a dummy drug name) and **`weight_treatment`** (Journey B — the weight
+  programme, screen "included, worth £49", category-level copy only, NO medicine
+  names). `getProduct(id, flags)` returns null for the weight product when
+  `weightLossRx` is off, so no assessment/treatment copy resolves in that state. Both
+  descriptors transmit through the existing pay-first **`treatment`** payment kind, so
+  the built refund-on-refusal (P4) covers both and the screening kit is ordered on pay.
+- **THE GATE (`src/lib/checkout/checkout.ts`):** a completed treatment payment advances
+  `intake_submitted -> screening_kit_sent` (orders the shared screening kit — the P5
+  "one screening, two doors" model) and NOTHING more. `advanceOnTreatmentPaid` gates
+  strictly on `paymentStatus='paid'` AND `state==='intake_submitted'` (the state is the
+  guard against double-ordering; a no-op otherwise, idempotent with the webhook). It
+  never reaches a decision state, never issues a script — a clinician still decides once
+  the bloods are in (the screening guard), and `rx_issued` stays reachable ONLY from
+  `approved`/`consult_done`. `finaliseTreatmentCheckout` is the return-page entry point
+  (mark paid from the live provider status, then run the gate).
+- **Consent captured (waitlist discipline):** a new `checkout_consent` pointer table
+  (migration `20260702000000_c2_checkout.sql`, applied to the remote dev DB) records
+  explicit, timestamped consent at checkout — account + product id + session pointer
+  only. NO card data, NO PII, NO Article 9. `recordCheckoutConsent` /
+  `getLatestCheckoutConsent` in `accounts.ts`. The `/checkout` form makes the consent
+  checkbox mandatory (enforced server-side in the start route too).
+- **Surfaces:** `src/pages/checkout.astro` (Fern-styled: line items, price, framing,
+  the mandatory consent, a **"Demo stand-in" pill**; off -> `WaitlistCta` only),
+  `src/pages/checkout/complete.astro` (return page — finalise + gate -> "your screening
+  kit is on its way"), `src/pages/api/checkout/start.ts` (flags gate + consent + start).
+  The mock checkout page shows a neutral, POM-safe `treatment` line ("Your Fern
+  programme (includes your health screen)") — no drug name in any checkout line.
+- **`submitWeightIntake` gained an `opts.orderKit` (default true).** The C2 flow submits
+  with `orderKit:false` (lands at `intake_submitted`, kit deferred to the paid
+  checkout); the default preserves the P4 orchestration (kit at intake) so the P4
+  weight-lane test is unchanged and green.
+- **Hard line untouched:** `RX_ISSUED_PREDECESSORS` stays `['approved','consult_done']`;
+  no machine change (the gate uses the already-legal `intake_submitted ->
+  screening_kit_sent`). The 3 hard-line tests are unchanged and green.
+- **Proven (`test/c2-checkout.test.ts`, 10):** the required per-journey test — a paid
+  treatment checkout advances to `screening_kit_sent` ONLY (both doors), with
+  `canTransition('screening_kit_sent','rx_issued')===false` and the predecessors
+  unchanged; the gate is a no-op when unpaid; consent is recorded tied to the session;
+  **pay -> screening -> refuse -> auto-refund asserted** (refunded flag + payment_ref
+  `refunded` + the mock provider session refunded); **pay -> screening -> approve ->
+  `rx_issued` via the clinician action only** (charge kept `paid`); and the descriptor
+  copy discipline (no drug term, no "free", each screen framed by its worth).
+- **Render walk (the flag-off proof — app is `output:'server'`, so this is a RENDER walk,
+  not a dist grep):** dev server, throwaway signup. OFF (`PURCHASE_ENABLED` default off)
+  -> `/checkout?product=weight_treatment` 200, shows only "Get early access" / the
+  waitlist, ZERO drug/price/"assessment"/product copy. ON (both flags) ->
+  `weight_treatment` renders "Weight and metabolic programme / £49 / health screen /
+  Demo stand-in / I consent / Pay £49" with NO drug term and no "free" in the copy;
+  `menopause_screen` renders "Midlife Health Screen / credited to your treatment /
+  pending menopause catalogue / Demo stand-in". `astro build` clean.
+- **Next:** C3 adds the consult checkout (Journey C, ~£100) reusing this surface with a
+  consult descriptor + a GLP initiation routing switch (async-with-bloods vs consult).
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

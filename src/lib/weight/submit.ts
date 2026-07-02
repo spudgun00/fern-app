@@ -32,7 +32,13 @@ export async function submitWeightIntake(
   accountId: string,
   corePatientId: string,
   answers: WeightIntakeAnswers,
+  // Checkout C2: the pay-first checkout gates the screening kit on payment, so the
+  // C2 flow submits the intake with orderKit=false (lands at intake_submitted) and
+  // the checkout completion orders the kit. Default true preserves the P4
+  // orchestration (kit ordered at intake) for callers that do not front a checkout.
+  opts: { orderKit?: boolean } = {},
 ): Promise<WeightSubmitResult> {
+  const orderKit = opts.orderKit ?? true;
   const decision = routeWeightIntake(answers);
 
   // Answers (BMI + contraindications) -> the core. The routing decision rides in
@@ -50,6 +56,12 @@ export async function submitWeightIntake(
 
   if (decision.outcome === 'stop') {
     // Contraindication: the journey stays at intake_submitted with the signpost.
+    return { intakeId, decision, kitRef: null };
+  }
+
+  if (!orderKit) {
+    // Pay-first (C2): defer the kit to the checkout gate. The journey stays at
+    // intake_submitted; the checkout orders the kit once payment is 'paid'.
     return { intakeId, decision, kitRef: null };
   }
 
