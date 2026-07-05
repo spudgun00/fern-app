@@ -22,7 +22,10 @@ export type CheckoutKind =
   | 'treatment'
   | 'medication'
   | 'addon_kit'
-  | 'rescreen';
+  | 'rescreen'
+  // Shop S3: the single basket-level payment for a mixed cart (one charge for the
+  // whole basket; the fulfilment router then splits OTC vs prescription lines).
+  | 'basket';
 
 export interface CheckoutSession {
   // Opaque provider session id. Persisted app-side as a pointer only.

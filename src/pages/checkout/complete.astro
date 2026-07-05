@@ -16,7 +16,10 @@ import { finaliseTreatmentCheckout } from '../../lib/checkout/checkout';
 import { finaliseLatestPending } from '../../lib/payments/billing';
 import { finaliseMedicationCheckout, medicationBillingFromEnv } from '../../lib/medication/medication';
 import { finaliseAddonCheckout, type AddonKind } from '../../lib/addons/addons';
+import { finaliseBasketCheckout } from '../../lib/checkout/basket';
+import { listOtcFulfilment } from '../../lib/accounts';
 import { getProduct } from '../../lib/checkout/products';
+import { getOtcProduct } from '../../data/otc-catalogue';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -26,6 +29,7 @@ const account = await ensureAccount(admin, user.id);
 if (account.role === 'clinician') return Astro.redirect('/clinician');
 
 const flags = flagsFromEnv(env);
+const isBasket = Astro.url.searchParams.get('basket') === '1';
 const product = getProduct(Astro.url.searchParams.get('product') ?? '', flags);
 const kind = product?.kind;
 const isConsult = kind === 'consult';
@@ -35,12 +39,26 @@ const isAddon = kind === 'addon_kit' || kind === 'rescreen';
 let problem: string | null = null;
 let gate: Awaited<ReturnType<typeof finaliseTreatmentCheckout>> | null = null;
 let medGate: Awaited<ReturnType<typeof finaliseMedicationCheckout>> | null = null;
+let basketResult: Awaited<ReturnType<typeof finaliseBasketCheckout>> | null = null;
 let addonPaid = false;
 let consultPaid = false;
 if (flags.purchaseEnabled) {
   try {
     const payments = getPayments(env, admin);
-    if (isConsult) {
+    if (isBasket) {
+      // Shop S3: finalise the single basket payment, then run the fulfilment
+      // router — OTC lines dispatch now; a prescription line enters the journey
+      // (screening), gated as today. Never reaches rx_issued.
+      const screening = getScreening(env, admin);
+      basketResult = await finaliseBasketCheckout(
+        admin,
+        payments,
+        screening,
+        account.id,
+        account.core_patient_id ?? '',
+        flags,
+      );
+    } else if (isConsult) {
       // Journey C: finalise the consult fee (marks it paid). Paying gates the
       // full-lane booking; the patient books next. No screening gate here.
       await finaliseLatestPending(admin, payments, account.id);
@@ -72,13 +90,22 @@ if (flags.purchaseEnabled) {
 }
 
 const journey = await getJourney(admin, account.id);
-const paid = isConsult
-  ? consultPaid
-  : isMedication
-    ? medGate?.covered === true
-    : isAddon
-      ? addonPaid
-      : gate?.paymentStatus === 'paid';
+// Basket mode: the dispatched OTC lines (resolved to names for display) + whether
+// a prescription line entered screening.
+const dispatchedOtc = isBasket
+  ? (await listOtcFulfilment(admin, account.id))
+      .map((f) => getOtcProduct(f.ref_id, flags)?.name)
+      .filter((n): n is string => Boolean(n))
+  : [];
+const paid = isBasket
+  ? basketResult?.paid === true
+  : isConsult
+    ? consultPaid
+    : isMedication
+      ? medGate?.covered === true
+      : isAddon
+        ? addonPaid
+        : gate?.paymentStatus === 'paid';
 const onScreening =
   journey?.state === 'screening_kit_sent' ||
   journey?.state === 'sample_received' ||
@@ -95,6 +122,34 @@ const onDispensing = journey?.state === 'dispensing' || journey?.state === 'deli
 
     <div class="card step-card stack">
       {problem && <p class="notice notice-error">{problem}</p>}
+
+      {paid && isBasket && (
+        <>
+          <span class="pill">Paid</span>
+          <p>Thank you. Your payment is confirmed. Here is how your basket is being fulfilled.</p>
+          {dispatchedOtc.length > 0 && (
+            <div class="fgroup">
+              <span class="pill">Ships now</span>
+              <ul class="fill-list">
+                {dispatchedOtc.map((n) => <li>{n}</li>)}
+              </ul>
+              <p class="muted small">Your shop items are on their way. No clinician needed for these.</p>
+            </div>
+          )}
+          {basketResult?.enteredScreening || onScreening ? (
+            <div class="fgroup">
+              <span class="pill pill-soft">Pending clinician review</span>
+              <p class="muted small">
+                For your treatment, we are posting your at-home screening kit. Once
+                your results are in, a clinician reviews them before anything is
+                prescribed. Nothing has been prescribed.
+              </p>
+              <a href="/screening" class="link">Track your screening</a>
+            </div>
+          ) : null}
+          <a href="/treatment" class="btn btn-pri">Go to your care</a>
+        </>
+      )}
 
       {paid && isConsult && (
         <>
@@ -131,7 +186,7 @@ const onDispensing = journey?.state === 'dispensing' || journey?.state === 'deli
         </>
       )}
 
-      {paid && !isConsult && !isMedication && !isAddon && onScreening && (
+      {paid && !isBasket && !isConsult && !isMedication && !isAddon && onScreening && (
         <>
           <span class="pill">Paid</span>
           <p>
@@ -143,7 +198,7 @@ const onDispensing = journey?.state === 'dispensing' || journey?.state === 'deli
         </>
       )}
 
-      {paid && !isConsult && !isMedication && !isAddon && !onScreening && (
+      {paid && !isBasket && !isConsult && !isMedication && !isAddon && !onScreening && (
         <>
           <span class="pill">Paid</span>
           <p>Your payment is confirmed. We will be in touch with your next step.</p>
@@ -164,7 +219,8 @@ const onDispensing = journey?.state === 'dispensing' || journey?.state === 'deli
 
     <p class="soft devline">
       <span class="dev-tag">Demo detail</span>
-      payment <code>{gate?.paymentStatus ?? 'none'}</code> &middot; state <code>{journey?.state}</code>
+      payment <code>{isBasket ? (basketResult?.paid ? 'paid' : 'pending') : (gate?.paymentStatus ?? 'none')}</code>
+      &middot; state <code>{journey?.state}</code>
     </p>
   </div>
 </Layout>
@@ -173,6 +229,11 @@ const onDispensing = journey?.state === 'dispensing' || journey?.state === 'deli
   .step-card { margin-top: 24px; }
   .step-card .pill { align-self: flex-start; }
   .step-card .btn { align-self: flex-start; }
+  .fgroup { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .fgroup .pill { align-self: flex-start; }
+  .fill-list { margin: 10px 0; padding-left: 18px; font-size: 14px; }
+  .fill-list li { margin-bottom: 2px; }
+  .small { font-size: 13px; }
   .devline { margin-top: 18px; font-size: 12.5px; }
   .dev-tag {
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;

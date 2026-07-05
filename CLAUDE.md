@@ -1448,6 +1448,56 @@ deployed, NOT pushed. NO checkout change (that is S3): this is the cart itself.
 - **Next:** S3 — the unified checkout + fulfilment router (ONE payment for the mixed basket;
   OTC dispatches now, prescription lines enter the journey; the hard part).
 
+## Shop S3 done (unified checkout + fulfilment router — one payment, split fulfilment)
+
+Shop roadmap S3 (spec `docs/fern-shop-basket-spec.md` §1-2/§5-6 + the S3 prompt). Built +
+proven by `npm test` (+3 S3 tests) + a live render walk (dev server, flags off then on),
+mock/test-mode (`PAYMENTS_IMPL=mock`), keyless. NOT deployed, NOT pushed. The hard part:
+ONE payment for a mixed basket, then each line routed by its type.
+
+- **THE FULFILMENT ROUTER — `src/lib/checkout/basket.ts`.** A mixed basket pays ONCE (one
+  provider session, `CheckoutKind`/`PaymentKind` `'basket'`), then `fulfilBasket` routes each
+  line by TYPE: **otc** -> `recordOtcDispatch` (mock "ships now", tracked in `otc_fulfilment`,
+  independent of any clinical state); **prescription** -> ENTER the existing journey — record a
+  per-line `'treatment'` payment_ref against the SAME basket session, then `advanceOnTreatmentPaid`
+  advances `intake_submitted -> screening_kit_sent` and NOTHING more. `startBasketCheckout`
+  (one session + per-prescription-line consent), `finaliseBasketCheckout` (mark the basket
+  session paid, run the router; idempotent — OTC upserted, treatment ref recorded once, gate
+  no-ops off `intake_submitted`, cart cleared last so a re-poll/webhook re-fire is a no-op).
+- **THE HARD LINE (load-bearing, held):** the basket payment gates OTC fulfilment + ENTRY to
+  the prescription journey — it NEVER reaches `rx_issued`. The router stops at the screening
+  branch; a clinician still decides once the bloods are in (the screening guard). OTC lines
+  never touch clinical state, never enter the journey. `RX_ISSUED_PREDECESSORS` stays
+  `['approved','consult_done']`; the 3 hard-line tests are **unchanged and green**.
+- **DB — one additive migration `20260705000001_s3_basket.sql`** (pushed to dev DB): a new
+  `payment_kind`/`CheckoutKind` value `'basket'` (the single basket payment record) + an
+  `otc_fulfilment` table (account + OTC slug + basket session pointer + coarse status
+  `dispatched`, unique per (account,session,ref) for idempotency). NON-CLINICAL pointers only;
+  no product detail, no card data, no PII, no Article 9.
+- **Surface:** the C2 `/checkout` now has TWO modes on the one page — a `?product=` legacy
+  single-product checkout (C2-C6, unchanged) and, with no product param, the S3 BASKET checkout
+  (reads the cart, groups lines by fulfilment "Ships now" / "Pending clinician review", one
+  consent for the prescription group, ONE Pay button -> `POST /api/checkout/start-basket`).
+  `/checkout/complete?basket=1` finalises + runs the router and shows the split (dispatched OTC
+  + the screening next step). `/cart` "Checkout" now links to `/checkout`. The mock checkout
+  page shows a neutral "Your Fern basket" line for the `basket` kind.
+- **Proven — `test/s3-basket-checkout.test.ts` (3):** **the mixed-basket success test — pay once
+  -> both OTC lines `dispatched` (independent), the prescription line reaches `screening_kit_sent`
+  ONLY, NO script issued** (`getPrescriptions` empty, `canTransition('screening_kit_sent',
+  'rx_issued')===false`, predecessors unchanged), cart cleared; finalise is idempotent (a re-poll
+  after the clear changes nothing); an OTC-only basket dispatches with the journey untouched (no
+  treatment ref, no script — pure e-commerce).
+- **Render walk (live, dev server):** flag OFF -> `/checkout` (basket) + `/cart` 200 waitlist-only,
+  zero product/price copy. Flag ON -> a mixed basket renders grouped by fulfilment with the
+  per-line refund promise + the consent; start-basket -> mock checkout (`kind=basket`) ->
+  mock-confirm -> `/checkout/complete?basket=1` shows "Paid" + "Ships now" with both supplement
+  names dispatched, and the cart is cleared. `.dev.vars` reverted.
+- **Go-live note:** `StripePayments.createCheckout` handles `'basket'` via the one-off path but a
+  real Stripe basket needs DYNAMIC line items (per-line prices), not the single consult price;
+  wire line items + amounts when the real Stripe path is turned on. The mock is the exercised path.
+- **Next:** S4 — per-line refund on refusal (refuse one prescription line -> only that line
+  refunded, OTC + approved lines untouched; reuse the P4 auto-refund).
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

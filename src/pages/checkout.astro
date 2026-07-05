@@ -16,6 +16,7 @@ import { ensureAccount, getJourney } from '../lib/accounts';
 import { flagsFromEnv } from '../lib/cta';
 import { getProduct } from '../lib/checkout/products';
 import { getProductCheckoutState } from '../lib/checkout/checkout';
+import { getResolvedCart } from '../lib/cart/cart';
 
 const { user, env } = Astro.locals;
 if (!user) return Astro.redirect('/login');
@@ -28,10 +29,32 @@ const flags = flagsFromEnv(env);
 const productId = Astro.url.searchParams.get('product') ?? '';
 const error = Astro.url.searchParams.get('error');
 
+// Two modes on the one surface. With a ?product= it is the legacy single-product
+// checkout (C2-C6). Without one it is the S3 BASKET checkout: read the cart, group
+// the lines by fulfilment, and take ONE payment for the whole basket.
+const isBasket = productId === '';
+
 // Resolve only when the purchase funnel is on. Off -> render the waitlist only.
-const product = flags.purchaseEnabled ? getProduct(productId, flags) : null;
+const product = flags.purchaseEnabled && !isBasket ? getProduct(productId, flags) : null;
 const checkoutState = product ? await getProductCheckoutState(admin, account.id, product) : null;
 const journey = product ? await getJourney(admin, account.id) : null;
+
+// Basket mode: the resolved cart + an indicative total (single-figure prices only;
+// the mock does not charge an amount, so a total is illustrative). If any line's
+// price is not a plain figure the total is omitted rather than shown wrong.
+const cart = flags.purchaseEnabled && isBasket ? await getResolvedCart(admin, account.id, flags) : null;
+function priceToNumber(p: string): number | null {
+  const digits = p.replace(/[^0-9]/g, '');
+  return /^[£]?\d+\*?$/.test(p.trim()) && digits ? Number(digits) : null;
+}
+let basketTotal: number | null = 0;
+if (cart) {
+  for (const l of cart.lines) {
+    const n = priceToNumber(l.price);
+    if (n === null) { basketTotal = null; break; }
+    basketTotal = (basketTotal ?? 0) + n;
+  }
+}
 
 // On a completed payment the surface routes on: the consult sends the patient to
 // book (Journey C gates the full-lane booking); medication sends them to their
@@ -70,7 +93,91 @@ const consentKind: ConsentKind =
 
     {!flags.purchaseEnabled && <WaitlistCta href={flags.waitlistUrl} />}
 
-    {flags.purchaseEnabled && !product && (
+    {flags.purchaseEnabled && isBasket && cart && cart.count === 0 && (
+      <div class="card step-card stack">
+        <span class="pill pill-soft">Empty basket</span>
+        <p class="muted">There is nothing to check out. Add something from the shop first.</p>
+        <a href="/shop" class="btn btn-pri">Go to the shop</a>
+      </div>
+    )}
+
+    {flags.purchaseEnabled && isBasket && cart && cart.count > 0 && (
+      <>
+        <p class="framing top-notice">
+          One payment for your whole basket. Each item is then fulfilled by its type:
+          your shop items ship now; a clinician reviews anything that needs a prescription.
+        </p>
+
+        {cart.hasOtc && (
+          <div class="card fgroup top-notice">
+            <div class="fgroup-head">
+              <span class="pill">Ships now</span>
+              <p class="fgroup-note">Posted to you once your payment is confirmed. No clinician needed.</p>
+            </div>
+            <ul class="lines">
+              {cart.otc.map((l) => (
+                <li>
+                  <span class="li-label">{l.name}</span>
+                  <span class="li-note">Over the counter</span>
+                  <span class="li-price">{l.price}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {cart.hasPrescription && (
+          <div class="card fgroup top-notice">
+            <div class="fgroup-head">
+              <span class="pill pill-soft">Pending clinician review</span>
+              <p class="fgroup-note">
+                A clinician reviews these before anything is prescribed. If a clinician
+                cannot prescribe one, you are refunded for it and the rest still ships.
+              </p>
+            </div>
+            <ul class="lines">
+              {cart.prescription.map((l) => (
+                <li>
+                  <span class="li-label">{l.name}</span>
+                  <span class="li-note">Prescription treatment</span>
+                  <span class="li-price">{l.price}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <form method="POST" action="/api/checkout/start-basket" class="card pay-form top-notice">
+          <span class="pill pill-soft">Demo stand-in</span>
+          <div class="total-row">
+            <span class="total-label">Total</span>
+            <span class="amount">{basketTotal !== null ? `£${basketTotal}` : 'See items above'}</span>
+          </div>
+          {cart.hasPrescription && (
+            <label class="consent">
+              <input type="checkbox" name="consent" required />
+              <span>
+                I consent to Fern processing this checkout. For any prescription item,
+                I understand a clinician reviews my details before anything is
+                prescribed, that nothing is prescribed without that review, and that
+                if a clinician cannot prescribe an item I am refunded for it.
+              </span>
+            </label>
+          )}
+          <button type="submit" class="btn btn-pri btn-block pay">
+            Pay {basketTotal !== null ? `£${basketTotal}` : 'for your basket'}
+          </button>
+          <p class="soft demo-note">
+            No card details are entered or stored here. The live payment uses the
+            provider's secure checkout.
+          </p>
+        </form>
+
+        <p class="soft"><a href="/cart" class="link">Back to your basket</a></p>
+      </>
+    )}
+
+    {flags.purchaseEnabled && !isBasket && !product && (
       <div class="card step-card stack">
         <span class="pill pill-soft">Not available</span>
         <p class="muted">This checkout is not available. Return to your account and pick up your next step there.</p>
@@ -182,6 +289,22 @@ const consentKind: ConsentKind =
   .top-notice { margin-top: 24px; }
   .step-card { margin-top: 24px; }
   .step-card .btn { align-self: flex-start; }
+
+  /* --- S3 basket mode --- */
+  .fgroup .fgroup-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+  .fgroup .fgroup-head .pill { align-self: flex-start; }
+  .fgroup-note { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+  .fgroup .lines { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--border); }
+  .fgroup .lines li {
+    display: grid; grid-template-columns: 1fr auto; align-items: baseline;
+    gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .fgroup .lines li:last-child { border-bottom: none; }
+  .fgroup .li-label { font-size: 15px; color: var(--text); }
+  .fgroup .li-note { grid-column: 1; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+  .fgroup .li-price { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--disp); font-size: 16px; font-weight: 600; color: var(--navy); }
+  .total-row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0 4px; }
+  .total-label { font-size: 15px; color: var(--muted); }
 
   .prod-head {
     display: flex; align-items: flex-start; justify-content: space-between;

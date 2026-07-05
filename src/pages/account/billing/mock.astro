@@ -20,7 +20,9 @@ const label =
     ? 'Membership (£18/mo)'
     : kind === 'treatment'
       ? 'Your Fern programme (includes your health screen)'
-      : 'Consultation fee (£100)';
+      : kind === 'basket'
+        ? 'Your Fern basket'
+        : 'Consultation fee (£100)';
 ---
 
 <Layout title="Checkout — Fern" navVariant="patient" user={user} narrow>

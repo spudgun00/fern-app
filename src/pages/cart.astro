@@ -100,12 +100,11 @@ const cart = flags.purchaseEnabled ? await getResolvedCart(admin, account.id, fl
 
         <div class="card checkout-card stack">
           <p class="soft">
-            <span class="dev-tag">Coming next</span>
-            One payment for the whole basket, then each line is fulfilled by its type,
-            arrives in the unified checkout (S3).
+            One payment for the whole basket. Your shop items ship now; anything that
+            needs a prescription goes to a clinician for review.
           </p>
           <div class="actions">
-            <button type="button" class="btn btn-pri" disabled>Checkout (S3)</button>
+            <a href="/checkout" class="btn btn-pri">Checkout</a>
             <a href="/shop" class="link">Keep shopping</a>
           </div>
         </div>

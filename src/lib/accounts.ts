@@ -513,13 +513,15 @@ export async function setScreeningRefStatus(
 // and the two Journey G add-ons — 'addon_kit' (side-effect kit, one-off) and
 // 'rescreen' (recurring re-screen). Kept in sync with the payment_kind enum
 // (migration 20260703000000) and CheckoutKind.
+// Shop S3 adds 'basket' — the single basket-level payment record for a mixed cart.
 export type PaymentKind =
   | 'consult'
   | 'membership'
   | 'treatment'
   | 'medication'
   | 'addon_kit'
-  | 'rescreen';
+  | 'rescreen'
+  | 'basket';
 
 export interface PaymentRef {
   id: string;
@@ -649,6 +651,54 @@ export async function getLatestCheckoutConsent(
     .maybeSingle();
   if (error) throw new Error(`getLatestCheckoutConsent: ${error.message}`);
   return (data as CheckoutConsent) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// OTC fulfilment pointer (shop S3). otc_fulfilment records the "ships now" leg of a
+// basket: which account, the OTC catalogue slug (ref_id), a pointer to the basket
+// payment session (provider_ref), and a coarse status ('dispatched'). NON-CLINICAL:
+// no product name / price / claim (resolved from the flag-gated catalogue at
+// render), no card data, no PII. Tracked independently of the prescription lines so
+// a per-line refund of a refused prescription line never touches a shipped OTC line.
+// ---------------------------------------------------------------------------
+export interface OtcFulfilment {
+  id: string;
+  account_id: string;
+  ref_id: string;
+  provider_ref: string | null;
+  status: string;
+  created_at: string;
+}
+
+// Record (idempotently) that an OTC line has been dispatched. Unique by (account,
+// basket session, ref) so a re-poll / webhook re-fire does not duplicate a shipment.
+export async function recordOtcDispatch(
+  db: SupabaseClient,
+  accountId: string,
+  refId: string,
+  providerRef: string,
+  status: string = 'dispatched',
+): Promise<void> {
+  const { error } = await db
+    .from('otc_fulfilment')
+    .upsert(
+      { account_id: accountId, ref_id: refId, provider_ref: providerRef, status },
+      { onConflict: 'account_id,provider_ref,ref_id', ignoreDuplicates: true },
+    );
+  if (error) throw new Error(`recordOtcDispatch: ${error.message}`);
+}
+
+export async function listOtcFulfilment(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<OtcFulfilment[]> {
+  const { data, error } = await db
+    .from('otc_fulfilment')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`listOtcFulfilment: ${error.message}`);
+  return (data as OtcFulfilment[]) ?? [];
 }
 
 // ---------------------------------------------------------------------------
