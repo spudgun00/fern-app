@@ -1547,6 +1547,28 @@ browse pages are a fern-site task, specced in `docs/fern-site-otc-shop-pages-spe
 here. Go-live carries two items: real Stripe dynamic line items for the `basket` kind + real OTC
 fulfilment (stock / carrier / VAT), both after CQC + clinical lead + compliance + the finance pass.
 
+## Phase C done (site->app handoff — the `/start` entry route)
+
+Showcase-playbook Phase C (`docs/fern-showcase-playbook.md` §4/§7), the fern-app half.
+Built + proven by `npm test` (+4 tests) + a live dev render walk. NOT deployed, NOT pushed.
+
+- **`/start` — the ONE canonical entry** the marketing site's Start CTA points at
+  (`https://app.fern.care/start`). A thin GET route (`src/pages/start.ts`) over a pure
+  resolver (`src/lib/start.ts` `startDestination`, unit-tested like `cta.ts`):
+  - **purchaseEnabled OFF** -> the waitlist (mirrors the entry-CTA switch), no DB read.
+  - **No session (a COLD visitor from the site)** -> `/signup`, which BEGINS account
+    creation and the linear onboarding chain (registered -> ID -> intake). Works hit
+    directly with no prior session — NOT a mid-flow drop.
+  - **A returning visitor** -> resume at their step (registered -> `/account/profile`,
+    id_pending -> `/account/verify`, id_verified -> `/intake`, past intake -> `/dashboard`);
+    a clinician -> `/clinician`. No branch dead-ends.
+- **Proven:** `test/start.test.ts` (4) covers every branch; live dev — `/start` cold with
+  purchase ON `302 -> /signup`, purchase OFF `302 -> the waitlist`. The marketing-site half
+  (repoint the Start CTA at `app.fern.care/start`) is the fern repo's Phase C commit.
+- **Not yet deployed:** `git push` + `npm run deploy` are James's call (Phase B — the
+  `app.fern.care` custom domain on the Worker — is the DNS piece that must land before the
+  live CTA resolves). The hard line is untouched (`/start` only redirects; no journey/decision code).
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and
