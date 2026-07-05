@@ -42,6 +42,8 @@
     "SCREENING_IMPL": "mock",
     "PURCHASE_ENABLED": "false",
     "WEIGHTLOSS_RX_ENABLED": "false",
+    "OTC_SHOP_ENABLED": "false",
+    "OTC_CATEGORIES": "",
     "WAITLIST_URL": "https://fern.care/#join",
     "GLP_CONSULT_REQUIRED": "false"
   }

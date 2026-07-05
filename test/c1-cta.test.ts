@@ -99,6 +99,9 @@ describe('C1 flag parsing (readEnv)', () => {
       weightLossRx: true,
       // C6 added menopauseRx to the flag bag; unset here -> false (default off).
       menopauseRx: false,
+      // Shop S1 added the OTC flags; unset here -> shop off, no categories.
+      otcShop: false,
+      otcCategories: [],
       waitlistUrl: WAITLIST_URL,
     });
   });

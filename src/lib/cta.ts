@@ -19,6 +19,13 @@ export interface CtaFlags {
   // does not change any entry CTA (the menopause door already resolves via
   // purchaseEnabled). No HRT name renders anywhere while it is off.
   menopauseRx: boolean;
+  // Shop S1: the OTC shop master switch (off by default). When off the OTC
+  // catalogue getters return [] and no OTC name / claim / price renders anywhere.
+  otcShop: boolean;
+  // Shop S1: the enabled OTC-category allowlist (parsed from OTC_CATEGORIES). A
+  // category renders only when otcShop is on AND its id is in this list, so
+  // production can clear categories one at a time. Empty by default (none on).
+  otcCategories: string[];
   waitlistUrl: string;
 }
 
@@ -47,13 +54,23 @@ const PURCHASE_LABEL: Record<FrontDoor, string> = {
 export function flagsFromEnv(
   env: Pick<
     AppEnv,
-    'PURCHASE_ENABLED' | 'WEIGHTLOSS_RX_ENABLED' | 'MENOPAUSE_RX_ENABLED' | 'WAITLIST_URL'
+    | 'PURCHASE_ENABLED'
+    | 'WEIGHTLOSS_RX_ENABLED'
+    | 'MENOPAUSE_RX_ENABLED'
+    | 'OTC_SHOP_ENABLED'
+    | 'OTC_CATEGORIES'
+    | 'WAITLIST_URL'
   >,
 ): CtaFlags {
   return {
     purchaseEnabled: env.PURCHASE_ENABLED,
     weightLossRx: env.WEIGHTLOSS_RX_ENABLED,
     menopauseRx: env.MENOPAUSE_RX_ENABLED,
+    otcShop: env.OTC_SHOP_ENABLED,
+    // Parse the comma-separated allowlist into trimmed, non-empty category ids.
+    otcCategories: env.OTC_CATEGORIES.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
     waitlistUrl: env.WAITLIST_URL,
   };
 }

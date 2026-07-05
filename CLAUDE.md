@@ -1358,6 +1358,52 @@ proven by mock like every prior money phase. Committed locally, **NOT pushed**. 
   `weight_medication` with `weightLossRx` off → "Not available". `.dev.vars` reverted to
   flags-off.
 
+## Shop S1 done (OTC / women's-wellbeing catalogue — data source + per-category flags)
+
+Shop roadmap S1 (spec `docs/fern-shop-basket-spec.md` §3-4 + the S1 prompt). Built +
+proven by `npm test` (218 passed, 204 → 218; +14 S1 tests) + a clean `astro build`. NOT
+deployed, NOT pushed. **Data source ONLY in this repo** — the public browse pages belong
+in fern-site and are handed off as a spec (see below), not built here. No shop/cart/checkout
+UI yet (S2+); this phase is the catalogue + its flag gating.
+
+- **The catalogue: `src/data/otc-catalogue.ts`.** The OTC / women's-wellbeing shop as
+  STRUCTURED DATA — a SEPARATE catalogue from the HRT/GLP drug layers, obeying a DIFFERENT
+  compliance rulebook (consumer-goods / food law, not POM advertising). `{ id, name,
+  category, price, patientDescription, authorisedClaims[], flag, placeholder }` +
+  `OTC_CATEGORIES` descriptors + a `complianceFlag?` governance note (never patient-facing).
+  Grouped by 8 categories: `intimate-vaginal`, `menopause-supplements`, `bone-muscle`,
+  `heart-brain`, `energy-focus`, `sleep-calm`, `skin-hair`, `gut-general` (~25 lines).
+  Getters `getOtcCatalogue(flags)` / `getOtcProduct(id, flags)` / `isCategoryEnabled(...)`
+  mirror the HRT catalogue's flag-guarded getters (return `[]` / `null` when off).
+- **Compliance discipline baked in (asserted by tests):** authorised GB nutrition/health
+  claims ONLY (verbatim register wording — "contributes to normal…"; NEVER "treats / cures /
+  balances / boosts", never a menopause/condition claim); a line whose active has no
+  authorised claim (botanicals, collagen, HA, probiotics, L-theanine) carries
+  `authorisedClaims: []` + a `complianceFlag`, factual copy only. NO POM: **melatonin is
+  EXCLUDED** (prescription-only in the UK), no hormonal intimate products (POM). The whole
+  set is `PLACEHOLDER_CATALOGUE = true` + every line `placeholder: true`; prices are real
+  retail markup (`£XX*`, provisional).
+- **Flags — master + per-category, ALL OFF by default:** `OTC_SHOP_ENABLED` (master) +
+  `OTC_CATEGORIES` (a comma-separated allowlist of enabled category ids) in `env.ts` /
+  `wrangler.jsonc` / `.dev.vars`; resolved onto `CtaFlags` as `otcShop: boolean` +
+  `otcCategories: string[]` in `cta.ts`. A category renders ONLY when the master is on AND
+  its id is in the allowlist, so production clears + switches on categories one at a time.
+  With the master off the getters return `[]` — no OTC name/claim/price resolves anywhere.
+- **HARD LINE untouched:** S1 is data + flags only; no journey/decision/payment code touched.
+  `RX_ISSUED_PREDECESSORS` stays `['approved','consult_done']`; the 3 hard-line tests are
+  unchanged and green.
+- **Proof method (RENDER, not dist grep — app is `output: 'server'`):** `test/s1-otc-catalogue.test.ts`
+  (14) proves flag-off → empty catalogue / null lookups; master-on + per-category allowlist
+  gating; the claims discipline (no treat/cure/balance/boost; register-worded claims; no
+  authorised sleep claim); the POM denylist absent from patient-facing copy; placeholder
+  discipline; and `flagsFromEnv` parsing the allowlist. `astro build` clean.
+- **fern-site hand-off:** `docs/fern-site-otc-shop-pages-spec.md` specs the public browse
+  pages to build in fern-site (routes `/shop`, `/shop/[category]`; sections + which catalogue
+  fields each reads; `PUBLIC_OTC_SHOP_ENABLED` + `PUBLIC_OTC_CATEGORIES` flag mirror; the
+  static-site dist-grep gate; the add-to-basket hand-off into the fern-app cart). Not built here.
+- **Next:** S2 — the unified cart (typed `otc | prescription` line items, addable from the
+  shop and the treatment flow).
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

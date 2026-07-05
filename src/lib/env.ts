@@ -64,6 +64,15 @@ export interface AppEnv {
   // contraindication intake. It never weakens the hard line: choosing a treatment
   // is a preference only; a clinician still issues every script. Non-secret var.
   MENOPAUSE_RX_ENABLED: boolean;
+  // Shop S1 — the OTC / women's-wellbeing shop. OFF by default. OTC_SHOP_ENABLED
+  // is the master switch: with it off no OTC catalogue name / claim / price
+  // renders anywhere. OTC_CATEGORIES is a comma-separated allowlist of the
+  // OTC category ids that are switched on (e.g. "bone-muscle,heart-brain"), so
+  // production can clear and turn on categories one at a time as their copy
+  // passes compliance. A category renders only when the master is on AND it is in
+  // this list. Empty by default (no category on). Both non-secret vars.
+  OTC_SHOP_ENABLED: boolean;
+  OTC_CATEGORIES: string;
   WAITLIST_URL: string;
   // Checkout C5 — the medication (Journey F) billing model. Open decision #4 in
   // the checkout spec: the POM is a pass-through (CloudRx) charge that can be
@@ -133,6 +142,8 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const purchaseEnabled = boolFlag(get('PURCHASE_ENABLED'));
   const weightLossRx = boolFlag(get('WEIGHTLOSS_RX_ENABLED'));
   const menopauseRx = boolFlag(get('MENOPAUSE_RX_ENABLED'));
+  const otcShopEnabled = boolFlag(get('OTC_SHOP_ENABLED'));
+  const otcCategories = get('OTC_CATEGORIES');
   const glpConsultRequired = boolFlag(get('GLP_CONSULT_REQUIRED'));
   // Open decision #4: default per_fill (a separate pass-through charge). Only the
   // exact string 'bundled' selects the membership-bundled model.
@@ -226,6 +237,8 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     PURCHASE_ENABLED: purchaseEnabled,
     WEIGHTLOSS_RX_ENABLED: weightLossRx,
     MENOPAUSE_RX_ENABLED: menopauseRx,
+    OTC_SHOP_ENABLED: otcShopEnabled,
+    OTC_CATEGORIES: otcCategories != null ? String(otcCategories) : '',
     WAITLIST_URL: waitlistUrl != null && String(waitlistUrl) ? String(waitlistUrl) : DEFAULT_WAITLIST_URL,
     GLP_CONSULT_REQUIRED: glpConsultRequired,
     MEDICATION_BILLING: medicationBilling,
