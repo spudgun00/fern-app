@@ -1498,6 +1498,42 @@ ONE payment for a mixed basket, then each line routed by its type.
 - **Next:** S4 — per-line refund on refusal (refuse one prescription line -> only that line
   refunded, OTC + approved lines untouched; reuse the P4 auto-refund).
 
+## Shop S4 done (per-line refund on refusal for a mixed basket)
+
+Shop roadmap S4 (spec `docs/fern-shop-basket-spec.md` §2/§5 + the S4 prompt). Built + proven
+by `npm test` (+2 S4 tests), mock/test-mode, keyless. NOT deployed, NOT pushed. Reuses the P4
+auto-refund, extended to a PARTIAL refund so a mixed basket refunds only the refused line.
+
+- **THE PROBLEM:** in a mixed basket the prescription line rides the SAME single payment as the
+  OTC lines (S3 records it as a `'treatment'` pointer against the basket session). A full refund
+  of that session would over-refund the shipped OTC in real Stripe. **THE FIX:** `refundOnRefusal`
+  (`src/lib/weight/refund.ts`) is now basket-aware — when the `'treatment'` pointer shares its
+  provider session with a `'basket'` pointer, it does a **PARTIAL refund of ONLY the prescription
+  line's amount** and flips ONLY the prescription pointer to `refunded` (by row id), leaving the
+  basket pointer (the OTC portion) `paid`. A standalone pay-first treatment (weight P4) still does
+  a FULL refund, unchanged (proven by the existing c2-checkout / weight-lane tests).
+- **The amount is catalogue-derived, never stored:** the refund reads the `checkout_consent` rows
+  captured against the basket session (which hold the prescription product ids), prices them from
+  the `PRODUCTS` descriptor, and passes the minor-unit total to `payments.refund(session, amountMinor)`.
+  App DB stores no amount (pointers only, unchanged).
+- **Adapter:** `PaymentsAdapter.refund(sessionId, amountMinor?)` gained the optional partial amount.
+  `MockPayments` marks the session `partially_refunded` (vs `refunded` for a full refund);
+  `StripePayments` adds `amount` to the refund POST (a real partial refund). New accounts helpers
+  `setPaymentRefStatusById` (flip one pointer, not both sharing a session) + `getCheckoutConsentsBySession`.
+- **Composed into the existing refuse branch** of `decideClinicianAction` / `decideConsultAction`
+  (both already pass `getPayments`), so refusing a screened basket patient refunds the prescription
+  line automatically. No new call site.
+- **HARD LINE held:** money only gates; refusing issues no script; the refund is on REFUSE only
+  (approve keeps the charge and reaches rx_issued via the clinician action alone).
+  `RX_ISSUED_PREDECESSORS` stays `['approved','consult_done']`; the 3 hard-line tests unchanged.
+- **Proven — `test/s4-basket-refund.test.ts` (2):** **the success test — mixed basket -> refuse
+  the prescription line -> the `treatment` pointer is `refunded`, the `basket` pointer stays `paid`,
+  the provider did a `partially_refunded` (not full) refund, the OTC lines stay `dispatched`, and
+  no script was issued**; and an APPROVED basket keeps the charge (`paid`, session `complete`) and
+  reaches `rx_issued` only via the clinician, OTC still shipped.
+- This completes the shop S1-S4 track. Real Stripe partial refunds + real fulfilment (stock /
+  carrier / VAT for OTC) go live only on CQC + clinical lead + compliance + the finance pass.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

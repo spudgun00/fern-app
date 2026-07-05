@@ -557,6 +557,19 @@ export async function setPaymentRefStatus(
   if (error) throw new Error(`setPaymentRefStatus: ${error.message}`);
 }
 
+// Set the status of ONE specific payment_ref by its row id. Shop S4 uses this to
+// flip only the prescription (treatment) pointer of a mixed basket to 'refunded',
+// leaving the basket-level pointer (the OTC portion) 'paid' — the two share a
+// provider session, so a by-provider_ref update would wrongly flip both.
+export async function setPaymentRefStatusById(
+  db: SupabaseClient,
+  id: string,
+  status: string,
+): Promise<void> {
+  const { error } = await db.from('payment_ref').update({ status }).eq('id', id);
+  if (error) throw new Error(`setPaymentRefStatusById: ${error.message}`);
+}
+
 export async function getLatestPaymentRef(
   db: SupabaseClient,
   accountId: string,
@@ -651,6 +664,24 @@ export async function getLatestCheckoutConsent(
     .maybeSingle();
   if (error) throw new Error(`getLatestCheckoutConsent: ${error.message}`);
   return (data as CheckoutConsent) ?? null;
+}
+
+// The consent rows captured against a given provider session (shop S3/S4). A mixed
+// basket records one consent per prescription line, tied to the basket session; the
+// per-line refund reads them back to find which prescription products the basket
+// held (to compute the partial refund amount from the catalogue).
+export async function getCheckoutConsentsBySession(
+  db: SupabaseClient,
+  accountId: string,
+  providerRef: string,
+): Promise<CheckoutConsent[]> {
+  const { data, error } = await db
+    .from('checkout_consent')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('provider_ref', providerRef);
+  if (error) throw new Error(`getCheckoutConsentsBySession: ${error.message}`);
+  return (data as CheckoutConsent[]) ?? [];
 }
 
 // ---------------------------------------------------------------------------

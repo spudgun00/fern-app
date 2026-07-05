@@ -113,15 +113,18 @@ export class StripePayments implements PaymentsAdapter {
   }
 
   // Refund a completed one-off Checkout by its session id: resolve the session's
-  // payment_intent, then create a full refund against it. Used by the automatic
-  // refund-on-refusal on the pay-first weight lane. (Test mode until go-live; the
+  // payment_intent, then create a refund against it. A full refund by default; with
+  // amountMinor (shop S4) a PARTIAL refund of that amount (the per-line refund for a
+  // mixed basket, so shipped OTC is not returned). (Test mode until go-live; the
   // exercised path in this build is MockPayments.refund.)
-  async refund(sessionId: string): Promise<void> {
+  async refund(sessionId: string, amountMinor?: number): Promise<void> {
     const session = await this.call(`/checkout/sessions/${sessionId}`, 'GET');
     const paymentIntent = session.payment_intent;
     if (paymentIntent == null) {
       throw new Error(`StripePayments.refund: session ${sessionId} has no payment_intent`);
     }
-    await this.call('/refunds', 'POST', { payment_intent: String(paymentIntent) });
+    const form: Record<string, string> = { payment_intent: String(paymentIntent) };
+    if (amountMinor !== undefined) form.amount = String(amountMinor);
+    await this.call('/refunds', 'POST', form);
   }
 }

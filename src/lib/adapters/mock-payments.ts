@@ -102,11 +102,15 @@ export class MockPayments implements PaymentsAdapter {
     if (upErr) this.fail('markPaid', upErr.message);
   }
 
-  // Refund a completed one-off payment (the pay-first weight treatment charge).
-  // Part of the PaymentsAdapter interface — this is the automatic refund-on-refusal
-  // path, so it is real behaviour, not a mock-only affordance. Marks the provider
-  // session refunded (a real provider would move the money back to the card).
-  async refund(sessionId: string): Promise<void> {
+  // Refund a completed one-off payment (the pay-first weight treatment charge, or a
+  // mixed basket's prescription line). Part of the PaymentsAdapter interface — the
+  // automatic refund-on-refusal path, real behaviour, not a mock-only affordance.
+  //
+  // Full refund (no amountMinor) -> the session is marked 'refunded' (the whole
+  // charge returns; the weight P4 lane). PARTIAL refund (amountMinor given, shop S4)
+  // -> the session is marked 'partially_refunded' and the OTC portion of a basket
+  // stays charged. A real provider moves the (partial) amount back to the card.
+  async refund(sessionId: string, amountMinor?: number): Promise<void> {
     const { data, error } = await this.db
       .from('mock_payment_session')
       .select('id,status')
@@ -114,9 +118,10 @@ export class MockPayments implements PaymentsAdapter {
       .maybeSingle();
     if (error) this.fail('refund', error.message);
     if (!data) this.fail('refund', `unknown session ${sessionId}`);
+    const status = amountMinor === undefined ? 'refunded' : 'partially_refunded';
     const { error: upErr } = await this.db
       .from('mock_payment_session')
-      .update({ status: 'refunded' })
+      .update({ status })
       .eq('id', sessionId);
     if (upErr) this.fail('refund', upErr.message);
   }

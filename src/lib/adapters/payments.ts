@@ -78,5 +78,12 @@ export interface PaymentsAdapter {
   // instantly, in code, not manually. Idempotent-ish: refunding an already
   // refunded / unpaid session is the provider's concern; callers gate on a paid
   // treatment payment_ref before calling.
-  refund(sessionId: string): Promise<void>;
+  //
+  // Shop S4: an OPTIONAL amountMinor (in the smallest currency unit, e.g. pence)
+  // makes it a PARTIAL refund. This is the per-line refund for a MIXED basket: when
+  // a clinician refuses the prescription line of a basket that also has OTC lines
+  // (all on ONE payment), only the prescription line's amount is returned, so the
+  // shipped OTC lines are NOT refunded. Omitted -> a full refund (the weight P4
+  // lane, unchanged).
+  refund(sessionId: string, amountMinor?: number): Promise<void>;
 }
