@@ -1,0 +1,145 @@
+---
+// Shop S2 — the unified cart. ONE basket, line items grouped by FULFILMENT so the
+// split is legible: "Ships now" (OTC) and "Pending clinician review" (prescription).
+// Each line shows its type + fulfilment label. S2 has NO checkout: the pay action
+// is stubbed with a note that the unified checkout arrives in S3.
+//
+// HARD LINE: nothing here touches clinical state or the journey. A prescription
+// line is entry only; the guard is unchanged — a clinician still decides once it
+// reaches review (S3).
+import Layout from '../layouts/Layout.astro';
+import WaitlistCta from '../components/WaitlistCta.astro';
+import { createAdminClient } from '../lib/supabase/admin';
+import { ensureAccount } from '../lib/accounts';
+import { flagsFromEnv } from '../lib/cta';
+import { getResolvedCart } from '../lib/cart/cart';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+
+const flags = flagsFromEnv(env);
+const error = Astro.url.searchParams.get('error');
+const cart = flags.purchaseEnabled ? await getResolvedCart(admin, account.id, flags) : null;
+---
+
+<Layout title="Your basket — Fern" navVariant="patient" user={user} narrow>
+  <div class="wrap-narrow">
+    <div class="stack head">
+      <span class="eyebrow">Your care</span>
+      <h1>Your basket</h1>
+    </div>
+
+    {error && <p class="notice notice-error top-notice">{error}</p>}
+
+    {!flags.purchaseEnabled && <WaitlistCta href={flags.waitlistUrl} />}
+
+    {flags.purchaseEnabled && cart && cart.count === 0 && (
+      <div class="card step-card stack">
+        <span class="pill pill-soft">Empty</span>
+        <p class="muted">Your basket is empty.</p>
+        <a href="/shop" class="btn btn-pri">Go to the shop</a>
+      </div>
+    )}
+
+    {flags.purchaseEnabled && cart && cart.count > 0 && (
+      <>
+        {cart.hasOtc && (
+          <section class="fgroup card">
+            <div class="fgroup-head">
+              <span class="pill">Ships now</span>
+              <p class="fgroup-note">Posted to you once your payment is confirmed. No clinician needed.</p>
+            </div>
+            <ul class="lines">
+              {cart.otc.map((l) => (
+                <li class="line">
+                  <div class="line-main">
+                    <span class="li-name">{l.name}</span>
+                    <span class="li-type">Over the counter</span>
+                  </div>
+                  <span class="li-price">{l.price}</span>
+                  <form method="POST" action="/api/cart/remove" class="rm">
+                    <input type="hidden" name="lineId" value={l.id} />
+                    <button type="submit" class="link-rm" aria-label={`Remove ${l.name}`}>Remove</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {cart.hasPrescription && (
+          <section class="fgroup card">
+            <div class="fgroup-head">
+              <span class="pill pill-soft">Pending clinician review</span>
+              <p class="fgroup-note">
+                A clinician reviews these before anything is prescribed. If a clinician
+                cannot prescribe one, you are refunded for it and the rest still ships.
+              </p>
+            </div>
+            <ul class="lines">
+              {cart.prescription.map((l) => (
+                <li class="line">
+                  <div class="line-main">
+                    <span class="li-name">{l.name}</span>
+                    <span class="li-type">Prescription treatment</span>
+                  </div>
+                  <span class="li-price">{l.price}</span>
+                  <form method="POST" action="/api/cart/remove" class="rm">
+                    <input type="hidden" name="lineId" value={l.id} />
+                    <button type="submit" class="link-rm" aria-label={`Remove ${l.name}`}>Remove</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <div class="card checkout-card stack">
+          <p class="soft">
+            <span class="dev-tag">Coming next</span>
+            One payment for the whole basket, then each line is fulfilled by its type,
+            arrives in the unified checkout (S3).
+          </p>
+          <div class="actions">
+            <button type="button" class="btn btn-pri" disabled>Checkout (S3)</button>
+            <a href="/shop" class="link">Keep shopping</a>
+          </div>
+        </div>
+      </>
+    )}
+  </div>
+</Layout>
+
+<style>
+  .head { margin-bottom: 8px; }
+  .top-notice { margin: 16px 0; }
+  .step-card { margin-top: 24px; }
+  .step-card .btn { align-self: flex-start; }
+
+  .fgroup { margin-top: 20px; }
+  .fgroup-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .fgroup-head .pill { align-self: flex-start; }
+  .fgroup-note { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+
+  .lines { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--border); }
+  .line {
+    display: grid; grid-template-columns: 1fr auto auto; align-items: center;
+    gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .line:last-child { border-bottom: none; }
+  .line-main { display: flex; flex-direction: column; gap: 2px; }
+  .li-name { font-size: 15px; color: var(--text); }
+  .li-type { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+  .li-price { font-family: var(--disp); font-size: 16px; font-weight: 600; color: var(--navy); }
+  .rm { margin: 0; }
+  .link-rm { background: none; border: none; color: var(--soft); font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 0; }
+  .link-rm:hover { color: var(--fern-warn); }
+
+  .checkout-card { margin-top: 24px; }
+  .actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .dev-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin-right: 8px; }
+</style>

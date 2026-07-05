@@ -1404,6 +1404,50 @@ UI yet (S2+); this phase is the catalogue + its flag gating.
 - **Next:** S2 — the unified cart (typed `otc | prescription` line items, addable from the
   shop and the treatment flow).
 
+## Shop S2 done (unified cart — typed OTC + prescription line items)
+
+Shop roadmap S2 (spec `docs/fern-shop-basket-spec.md` §5 + the S2 prompt). Built + proven
+by `npm test` (+7 S2 tests) + a live render walk (dev server, flags off then on). NOT
+deployed, NOT pushed. NO checkout change (that is S3): this is the cart itself.
+
+- **The basket model — `src/lib/cart/cart.ts`.** ONE basket per patient holding TYPED line
+  items: `type: 'otc' | 'prescription'`. The pure `fulfilmentFor(type)` is the heart of the
+  split — `otc -> 'ships-now'` ("Ships now", mock dispatch on payment, no clinician);
+  `prescription -> 'pending-review'` ("Pending clinician review"). `resolveCartLine` /
+  `getResolvedCart` resolve each stored line against the FLAG-GATED catalogues (`getOtcProduct`
+  for OTC, `getProduct` for treatment) and group by fulfilment; a line whose product no longer
+  resolves under the flags is hidden. CRUD: `addCartItem` (idempotent by (account,type,ref)),
+  `removeCartItem`, `clearCart` (S3 uses it post-checkout).
+- **DB — one additive migration `20260705000000_s2_cart.sql`** (pushed to the linked dev DB):
+  `cart_item` = a NON-CLINICAL pointer row (`account_id`, `line_type` check `otc|prescription`,
+  `ref_id` = a catalogue slug), unique on (account,type,ref). NO card data, NO PII, NO Article 9;
+  product detail is resolved from the catalogues at render, never stored. A prescription line is
+  ENTRY to the journey only — it holds no clinical state.
+- **Surfaces:** `/shop` (in-app, flag-gated — the OTC catalogue by enabled category + the
+  treatment entries `menopause_screen`/`weight_treatment`, each an "Add to basket" form; the
+  internal `complianceFlag` is NEVER rendered), `/cart` (the unified basket grouped by
+  fulfilment: a periwinkle "Ships now" group + a soft "Pending clinician review" group with the
+  per-line refund promise inline; a stubbed disabled checkout button labelled "S3"). Routes
+  `POST /api/cart/add` (validates the line against the flag-gated catalogue server-side so a
+  stale/off/unknown line can't enter — also the endpoint fern-site's shop cards target) +
+  `POST /api/cart/remove`. "Shop" + "Basket" added to the patient nav.
+- **HARD LINE untouched:** the cart is non-clinical; adding/holding a line touches no journey
+  state, no script, nothing near `rx_issued`. `RX_ISSUED_PREDECESSORS` stays
+  `['approved','consult_done']`; the 3 hard-line tests unchanged and green.
+- **Proven — `test/s2-cart.test.ts` (7):** the pure fulfilment split + labels; `resolveCartLine`
+  types + labels each line and reads the catalogue name/price; a flag-off line is hidden; **the
+  success test — a cart holds OTC + prescription lines TOGETHER, correctly typed and labelled,
+  grouped by fulfilment, `isMixed` true**; idempotent add; remove/clear; and OTC lines hidden
+  while prescription lines remain when the shop flag is off.
+- **Render walk (live, dev server):** flag OFF (default) -> `/shop` + `/cart` 200 with ONLY the
+  waitlist CTA, ZERO product/price/OTC copy. Flag ON (`.dev.vars` flipped: purchase + otcShop +
+  two categories + weightLossRx, restart) -> `/shop` renders the two enabled categories (prices +
+  authorised claims + "Add to basket") and the treatments section, a NOT-enabled category is
+  absent, the `complianceFlag` never renders; adding one OTC + one treatment line -> `/cart`
+  shows the mixed basket in its two fulfilment groups with the typed labels. `.dev.vars` reverted.
+- **Next:** S3 — the unified checkout + fulfilment router (ONE payment for the mixed basket;
+  OTC dispatches now, prescription lines enter the journey; the hard part).
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

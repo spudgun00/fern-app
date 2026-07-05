@@ -19,6 +19,11 @@ const { variant = 'public', user = null, active = '' } = Astro.props;
 const patientLinks = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/treatment', label: 'Treatment' },
+  // Shop S2: the OTC shop + unified basket. The label carries no product / price /
+  // claim copy; the surfaces themselves render the waitlist when the purchase
+  // funnel is off (so the off-state stays clean).
+  { href: '/shop', label: 'Shop' },
+  { href: '/cart', label: 'Basket' },
   { href: '/messages', label: 'Messages' },
   { href: '/documents', label: 'Documents' },
 ];

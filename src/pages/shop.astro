@@ -1,0 +1,182 @@
+---
+// Shop S2 — the in-app OTC shop + treatment entries, the surface that fills the
+// unified cart. OTC products (food supplements / intimate care) add an 'otc' line;
+// the treatment entries add a 'prescription' line. Everything is flag-gated:
+//   * the whole surface needs the purchase funnel on (purchaseEnabled);
+//   * the OTC catalogue needs the otcShop master + each category's per-category flag;
+//   * a treatment product needs its own Rx flag (weightLossRx / menopauseRx) where it has one.
+//
+// HARD LINE (render-clean when off): with the purchase funnel off this shows only
+// the waitlist. With the OTC shop off no OTC name / claim / price renders (the
+// getter returns []). Authorised claims render verbatim; the internal complianceFlag
+// is NEVER shown. Note the public browse pages live in fern-site (see the S1 spec);
+// this is the app-side shop that drives the basket.
+import Layout from '../layouts/Layout.astro';
+import WaitlistCta from '../components/WaitlistCta.astro';
+import { createAdminClient } from '../lib/supabase/admin';
+import { ensureAccount } from '../lib/accounts';
+import { flagsFromEnv } from '../lib/cta';
+import { getOtcCatalogue } from '../data/otc-catalogue';
+import { getProduct } from '../lib/checkout/products';
+import { getResolvedCart } from '../lib/cart/cart';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+
+const flags = flagsFromEnv(env);
+const error = Astro.url.searchParams.get('error');
+
+const catalogue = flags.purchaseEnabled ? getOtcCatalogue(flags) : [];
+// The treatment (prescription) entries that resolve under the flags. These are the
+// screen-first journey entries; medication / add-ons are post-clinician, not basket
+// entries, so they are not offered here.
+const treatmentEntries = flags.purchaseEnabled
+  ? (['menopause_screen', 'weight_treatment'] as const)
+      .map((id) => getProduct(id, flags))
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+  : [];
+
+const cart = flags.purchaseEnabled ? await getResolvedCart(admin, account.id, flags) : null;
+const shopEmpty = catalogue.length === 0 && treatmentEntries.length === 0;
+---
+
+<Layout title="Shop — Fern" navVariant="patient" user={user}>
+  <div class="wrap">
+    <div class="stack head">
+      <span class="eyebrow">Your care</span>
+      <h1>Shop</h1>
+      <p class="lede">
+        Everyday women's-wellbeing products and your treatment options, in one basket.
+      </p>
+    </div>
+
+    {error && <p class="notice notice-error top-notice">{error}</p>}
+
+    {!flags.purchaseEnabled && <WaitlistCta href={flags.waitlistUrl} />}
+
+    {flags.purchaseEnabled && cart && cart.count > 0 && (
+      <p class="cart-bar">
+        <span class="pill">{cart.count} in your basket</span>
+        <a href="/cart" class="link">View basket</a>
+      </p>
+    )}
+
+    {flags.purchaseEnabled && shopEmpty && (
+      <div class="card step-card stack">
+        <span class="pill pill-soft">Nothing here yet</span>
+        <p class="muted">
+          The shop is not open in this environment. Your treatment options appear
+          here once they are switched on.
+        </p>
+        <a href="/dashboard" class="link">Back to your dashboard</a>
+      </div>
+    )}
+
+    {treatmentEntries.length > 0 && (
+      <section class="group">
+        <div class="group-head">
+          <h2>Treatments</h2>
+          <p class="group-blurb">
+            A clinician reviews these before anything is prescribed. Added to your
+            basket as a "pending clinician review" line.
+          </p>
+        </div>
+        <div class="grid">
+          {treatmentEntries.map((p) => (
+            <div class="card prod">
+              <span class="pill pill-soft">Pending clinician review</span>
+              <h3>{p.title}</h3>
+              <p class="desc">{p.framing}</p>
+              <div class="prod-foot">
+                <span class="price">{p.price}</span>
+                <form method="POST" action="/api/cart/add">
+                  <input type="hidden" name="type" value="prescription" />
+                  <input type="hidden" name="productId" value={p.id} />
+                  <input type="hidden" name="back" value="/shop" />
+                  <button type="submit" class="btn btn-pri btn-sm">Add to basket</button>
+                </form>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {catalogue.map((cgroup) => (
+      <section class="group">
+        <div class="group-head">
+          <h2>{cgroup.category.title}</h2>
+          <p class="group-blurb">{cgroup.category.blurb}</p>
+        </div>
+        <div class="grid">
+          {cgroup.products.map((p) => (
+            <div class="card prod">
+              <span class="pill">Ships now</span>
+              <h3>{p.name}</h3>
+              <p class="desc">{p.patientDescription}</p>
+              {p.authorisedClaims.length > 0 && (
+                <ul class="claims">
+                  {p.authorisedClaims.map((c) => (
+                    <li>{c}</li>
+                  ))}
+                </ul>
+              )}
+              <div class="prod-foot">
+                <span class="price">{p.price}</span>
+                <form method="POST" action="/api/cart/add">
+                  <input type="hidden" name="type" value="otc" />
+                  <input type="hidden" name="productId" value={p.id} />
+                  <input type="hidden" name="back" value="/shop" />
+                  <button type="submit" class="btn btn-pri btn-sm">Add to basket</button>
+                </form>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    {catalogue.length > 0 && (
+      <p class="soft foot-note">
+        Prices marked * are indicative and pending sign-off. Food supplements are
+        not a substitute for a varied diet and a healthy lifestyle.
+      </p>
+    )}
+  </div>
+</Layout>
+
+<style>
+  .head { margin-bottom: 8px; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 60ch; }
+  .top-notice { margin: 16px 0; }
+  .cart-bar { display: flex; align-items: center; gap: 14px; margin: 16px 0 8px; }
+  .step-card { margin-top: 24px; }
+  .step-card .btn, .step-card .link { align-self: flex-start; }
+
+  .group { margin-top: 40px; }
+  .group-head { margin-bottom: 18px; }
+  .group-head h2 { font-size: 20px; }
+  .group-blurb { color: var(--muted); font-size: 14px; margin-top: 4px; max-width: 60ch; }
+
+  .grid {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .prod { display: flex; flex-direction: column; gap: 10px; }
+  .prod .pill { align-self: flex-start; }
+  .prod h3 { font-size: 16.5px; }
+  .desc { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+  .claims { margin: 0; padding-left: 18px; color: var(--soft); font-size: 12.5px; line-height: 1.6; }
+  .claims li { margin-bottom: 2px; }
+  .prod-foot {
+    margin-top: auto; padding-top: 12px; display: flex; align-items: center;
+    justify-content: space-between; gap: 12px; border-top: 1px solid var(--border);
+  }
+  .price { font-family: var(--disp); font-size: 18px; font-weight: 600; color: var(--navy); }
+  .btn-sm { padding: 8px 14px; font-size: 13.5px; }
+  .foot-note { margin-top: 32px; font-size: 12.5px; }
+</style>
