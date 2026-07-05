@@ -40,10 +40,12 @@
     "VIDEO_IMPL": "mock",
     "EMAIL_IMPL": "mock",
     "SCREENING_IMPL": "mock",
-    "PURCHASE_ENABLED": "false",
-    "WEIGHTLOSS_RX_ENABLED": "false",
-    "OTC_SHOP_ENABLED": "false",
-    "OTC_CATEGORIES": "",
+    "PURCHASE_ENABLED": "true",
+    "WEIGHTLOSS_RX_ENABLED": "true",
+    "MENOPAUSE_RX_ENABLED": "true",
+    "OTC_SHOP_ENABLED": "true",
+    "OTC_CATEGORIES": "intimate-vaginal,menopause-supplements,bone-muscle,heart-brain,energy-focus,sleep-calm,skin-hair,gut-general",
+    "MEDICATION_BILLING": "per_fill",
     "WAITLIST_URL": "https://fern.care/#join",
     "GLP_CONSULT_REQUIRED": "false"
   }
