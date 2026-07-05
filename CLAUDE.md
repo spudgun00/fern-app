@@ -1534,6 +1534,19 @@ auto-refund, extended to a PARTIAL refund so a mixed basket refunds only the ref
 - This completes the shop S1-S4 track. Real Stripe partial refunds + real fulfilment (stock /
   carrier / VAT for OTC) go live only on CQC + clinical lead + compliance + the finance pass.
 
+### Shop track status after S4 (this repo's shop phases)
+
+The shop/basket phases are **S1-S4, all done + green (230 tests)**: OTC catalogue data source +
+per-category flags (S1), unified typed cart (S2), unified checkout + fulfilment router — one
+payment, split fulfilment (S3), per-line refund on refusal (S4). Built against mocks
+(`PAYMENTS_IMPL=mock`, keyless), committed on `d2-patient-surfaces` and **pushed**. Two additive
+migrations applied to the linked dev DB (`cart_item`, `otc_fulfilment` + the `basket` payment_kind).
+Hard line held every phase (`RX_ISSUED_PREDECESSORS` unchanged, the 3 hard-line tests untouched;
+a basket payment gates OTC fulfilment + entry to the journey, never `rx_issued`). The public OTC
+browse pages are a fern-site task, specced in `docs/fern-site-otc-shop-pages-spec.md`, not built
+here. Go-live carries two items: real Stripe dynamic line items for the `basket` kind + real OTC
+fulfilment (stock / carrier / VAT), both after CQC + clinical lead + compliance + the finance pass.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and
