@@ -91,6 +91,13 @@ export interface AppEnv {
   // it flips WITHOUT a rewrite. It never weakens the hard line: either way a
   // clinician makes the prescribing decision. Non-secret var, default OFF (async).
   GLP_CONSULT_REQUIRED: boolean;
+  // Phase D — the outer demo password gate (shared with the marketing site across
+  // *.fern.care). When set, the middleware locks every route behind a password
+  // page (except the gate page + webhooks); when unset the gate is DISABLED so
+  // local dev + tests run unchallenged. A server-only secret (set via
+  // `wrangler secret put PREVIEW_PASS`), never PUBLIC_. Entirely separate from
+  // Supabase patient auth. See src/lib/preview-gate.ts.
+  PREVIEW_PASS?: string;
 }
 
 const DEFAULT_EMAIL_FROM = 'Fern <noreply@mail.fern.care>';
@@ -150,6 +157,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const medicationBilling: AppEnv['MEDICATION_BILLING'] =
     String(get('MEDICATION_BILLING') ?? '').toLowerCase() === 'bundled' ? 'bundled' : 'per_fill';
   const waitlistUrl = get('WAITLIST_URL');
+  const previewPass = get('PREVIEW_PASS');
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
   // keeping them out of REQUIRED lets mock dev + tests run without them.
@@ -242,5 +250,6 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     WAITLIST_URL: waitlistUrl != null && String(waitlistUrl) ? String(waitlistUrl) : DEFAULT_WAITLIST_URL,
     GLP_CONSULT_REQUIRED: glpConsultRequired,
     MEDICATION_BILLING: medicationBilling,
+    PREVIEW_PASS: previewPass != null && String(previewPass) ? String(previewPass) : undefined,
   };
 }

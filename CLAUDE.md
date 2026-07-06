@@ -1572,6 +1572,46 @@ Built + proven by `npm test` (+4 tests) + a live dev render walk. NOT deployed, 
   account creation on the canonical domain). Demo flags stay on (the earlier flag-flip deploy).
   The hard line is untouched (`/start` only redirects; no journey/decision code).
 
+## Phase D done (one password gate across *.fern.care — shared cookie gate)
+
+Showcase-playbook Phase D (`docs/fern-showcase-playbook.md` §4/§7), the fern-app half.
+Built + proven by `npm test` + `astro build` + a live dev walk. NOT deployed, NOT pushed.
+Replaces the two SEPARATE per-origin preview locks (the marketing site's HTTP Basic Auth +
+whatever gated the app preview) with ONE shared cookie gate: enter the password once on
+`fern.care` and move to `app.fern.care` with no second challenge.
+
+- **The mechanism (`src/lib/preview-gate.ts`, pure + unit-tested like `cta.ts`/`start.ts`):**
+  ONE password (env `PREVIEW_PASS`) unlocks both subdomains. `/gate` (a self-contained,
+  Fern-styled password page) validates the password and sets a `fern_preview` cookie whose
+  value is a DERIVED token — `sha256("fern-preview-gate-v1:" + password)`, never the password
+  — scoped to **`Domain=.fern.care`** so both subdomains share it (host-only on `localhost` /
+  `*.workers.dev` so local dev + the raw preview URL still work). The middleware
+  (`src/middleware.ts`) checks the cookie BEFORE any Supabase work and redirects to
+  `/gate?next=<path>` when absent/invalid; `/gate` itself and `/api/webhooks/*` are always
+  exempt (a webhook cannot carry the cookie). The IDENTICAL derivation (same cookie name,
+  salt, algorithm) is mirrored in the marketing repo's `functions/_middleware.js`, so a token
+  minted on one origin validates on the other.
+- **CRITICAL — Supabase patient auth is UNTOUCHED.** The gate is a separate OUTER layer: it
+  runs before, and does not read/modify, `createSupabaseServerClient` / `supabase.auth` /
+  `context.locals.user`. The middleware diff only ADDS the gate check ahead of the existing
+  (unchanged) Supabase session block. The gate cookie (`fern_preview`) is distinct from the
+  Supabase session cookies. No login/signup/session code was changed.
+- **Config discipline:** `PREVIEW_PASS` is a server-only SECRET (`wrangler secret put
+  PREVIEW_PASS`), never `PUBLIC_`, never in `wrangler.jsonc`. **When UNSET the gate is
+  DISABLED** (fail-open) so `npm run dev` + `npm test` + the raw `*.workers.dev` URL are
+  unchallenged; production sets the secret to lock the preview. (The marketing side fails
+  SHUT — 503 — when unset, since it is the public-facing surface; the two postures are
+  intentional.) The hard line is untouched (the gate only redirects; no journey/decision
+  code). `npm test`: full suite green (+8 `test/preview-gate.test.ts` — token determinism,
+  constant-time compare, cookie reader, and `.fern.care`-vs-host-only cookie scoping).
+- **Proven on the dev server:** with `PREVIEW_PASS` set, any route 302s to `/gate`; submitting
+  the wrong password re-prompts; submitting the right one sets the `fern_preview` cookie
+  (`Domain=.fern.care` on a fern.care host) and returns to `next`; with the cookie present
+  every route serves; clearing the cookie re-locks. Cross-subdomain (fern.care -> app.fern.care
+  with one password) is the deployed behaviour — the shared `Domain=.fern.care` cookie + the
+  identical token derivation across both repos. **To activate:** `wrangler secret put
+  PREVIEW_PASS` (same value on both the Pages project and this Worker), then `npm run deploy`.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

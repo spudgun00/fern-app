@@ -1,0 +1,169 @@
+---
+import { deriveToken, buildCookie, PREVIEW_COOKIE } from '../lib/preview-gate';
+
+// Phase D — the shared demo password page. Handles GET (render the form) and
+// POST (validate the password, set the .fern.care cookie, return to `next`).
+// This route is exempt from the gate in the middleware, so it is always
+// reachable. Self-contained inline styles: it must render pre-auth without
+// depending on any gated asset.
+//
+// It unlocks the OUTER demo gate only; Supabase patient auth is untouched.
+
+const env = Astro.locals.env;
+const expectedPass = env.PREVIEW_PASS;
+
+// Gate not configured => nothing to unlock. Send the visitor to the app.
+if (!expectedPass) return Astro.redirect('/');
+
+const url = new URL(Astro.request.url);
+const sanitiseNext = (raw: string | null): string => {
+  // Local, same-origin paths only — never an open redirect.
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+};
+
+let error = false;
+// The redirect target: the POSTed field on submit, else the query param on GET.
+// Preserved across a failed attempt so the viewer still returns to where they
+// were headed once the password is right.
+let next = sanitiseNext(url.searchParams.get('next'));
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const pass = String(form.get('password') || '');
+  next = sanitiseNext(String(form.get('next') || '/'));
+
+  // Compare the submitted password to the expected one via the derived token
+  // (constant-time-ish: deriveToken hashes, then a fixed-length hex compare).
+  const submitted = await deriveToken(pass);
+  const expected = await deriveToken(expectedPass);
+  if (submitted === expected) {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        Location: next,
+        'Set-Cookie': buildCookie(url.hostname, expected),
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+  error = true;
+}
+---
+
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Fern preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #F8F7F0;
+        color: #1B1C3A;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      .card {
+        width: 100%;
+        max-width: 400px;
+        background: #FCFBF6;
+        border: 1px solid #E4DDD0;
+        border-radius: 16px;
+        padding: 36px 32px;
+        box-shadow: 0 1px 2px rgba(27, 28, 58, 0.04);
+      }
+      .mark {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0 0 4px;
+      }
+      .mark .dot { color: #D6F034; }
+      .lead {
+        margin: 0 0 24px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #4a4b63;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        color: #4a4b63;
+      }
+      input[type='password'] {
+        width: 100%;
+        padding: 12px 14px;
+        font-size: 15px;
+        border: 1px solid #E4DDD0;
+        border-radius: 10px;
+        background: #fff;
+        color: #1B1C3A;
+      }
+      input[type='password']:focus {
+        outline: none;
+        border-color: #1B1C3A;
+      }
+      button {
+        width: 100%;
+        margin-top: 16px;
+        padding: 13px 16px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #F8F7F0;
+        background: #1B1C3A;
+        border: 0;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      button:hover { background: #14152A; }
+      .error {
+        margin: 0 0 16px;
+        padding: 10px 12px;
+        font-size: 13px;
+        border-radius: 8px;
+        background: #C6CEF4;
+        color: #1B1C3A;
+      }
+      .foot {
+        margin: 20px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #8a8ba0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p class="mark">Fern<span class="dot">.</span></p>
+      <p class="lead">Private preview. Enter the password to continue.</p>
+      {error && <p class="error">That password was not recognised. Please try again.</p>}
+      <form method="POST" action="/gate">
+        <input type="hidden" name="next" value={next} />
+        <label for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          autofocus
+          required
+        />
+        <button type="submit">Enter</button>
+      </form>
+      <p class="foot">
+        Demonstration, not yet operating. Dummy data, no real patients or live care.
+      </p>
+    </div>
+  </body>
+</html>
