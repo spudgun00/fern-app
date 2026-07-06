@@ -1547,6 +1547,22 @@ browse pages are a fern-site task, specced in `docs/fern-site-otc-shop-pages-spe
 here. Go-live carries two items: real Stripe dynamic line items for the `basket` kind + real OTC
 fulfilment (stock / carrier / VAT), both after CQC + clinical lead + compliance + the finance pass.
 
+### Shop follow-up — energy-focus example products (commit `b67dd7a`, pushed + DEPLOYED)
+
+Added the three `energy-focus` OTC lines from the spec appendix worked example ("the focus-gum
+model made compliant") to `src/data/otc-catalogue.ts` — **Focus & Clarity Gum** (£14*),
+**Daily Mind Complex** (£16*), **Magnesium Calm** (£12*). No new category, no schema change; all
+`placeholder: true`, behind the existing `energy-focus` category flag. **The compliance pattern:**
+caffeine + L-theanine are FACTUAL ingredients only (neither carries an authorised GB/EU claim), so
+every `authorisedClaims[]` entry rests solely on the added B-vitamins / minerals that earn it
+(verbatim register wording, tied to the nutrient present); no claim on caffeine/L-theanine, no
+condition/menopause claim anywhere; the gum carries a `complianceFlag` (caffeine labelling + the
+>=15% NRV significant-amount rule). Proven: energy-focus on -> all three render with their claims +
+prices (group now 6); category/master off -> getters null, catalogue clean; no authorised claim
+contains focus/brain fog/menopause. `npm test` green (**253**, S1's 14 discipline assertions pass;
+no new test needed — the catalogue tests count dynamically). Hard line untouched (catalogue data
+only). Committed + PUSHED on `d2-patient-surfaces`.
+
 ## Phase C done (site->app handoff — the `/start` entry route)
 
 Showcase-playbook Phase C (`docs/fern-showcase-playbook.md` §4/§7), the fern-app half.
