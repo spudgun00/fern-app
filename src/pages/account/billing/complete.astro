@@ -30,7 +30,7 @@ const view = await getBillingView(admin, account.id);
 const journey = await getJourney(admin, account.id);
 ---
 
-<Layout title="Payment — Fern" navVariant="patient" user={user} narrow>
+<Layout title="Payment — Fern" navVariant="patient" user={user} narrow step={4}>
   <div class="wrap-narrow">
     <div class="stack">
       <span class="eyebrow">Your account</span>

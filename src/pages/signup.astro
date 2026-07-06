@@ -7,7 +7,7 @@ if (Astro.locals.user) {
 }
 const error = Astro.url.searchParams.get('error');
 ---
-<Layout title="Sign up — Fern" navVariant="public" user={null} narrow>
+<Layout title="Sign up — Fern" navVariant="public" user={null} narrow step={1}>
   <div class="wrap-narrow">
     <div class="stack">
       <span class="eyebrow">Create your account</span>

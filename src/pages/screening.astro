@@ -33,7 +33,7 @@ const MARKER_LABEL: Record<string, string> = {
 const label = (m: string) => MARKER_LABEL[m] ?? m;
 ---
 
-<Layout title={`${MIDLIFE_SCREEN.title} — Fern`} navVariant="patient" user={user} active="/screening">
+<Layout title={`${MIDLIFE_SCREEN.title} — Fern`} navVariant="patient" user={user} active="/screening" step={4}>
   <div class="wrap screen">
     <div class="head stack">
       <span class="eyebrow">Screening</span>

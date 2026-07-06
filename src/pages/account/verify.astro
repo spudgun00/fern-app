@@ -24,7 +24,7 @@ if (journey && journey.state !== 'registered' && journey.state !== 'id_pending')
 const error = Astro.url.searchParams.get('error');
 const pending = journey?.state === 'id_pending';
 ---
-<Layout title="Verify your identity — Fern" navVariant="onboarding" user={user} narrow>
+<Layout title="Verify your identity — Fern" navVariant="onboarding" user={user} narrow step={2}>
   <div class="wrap-narrow">
     <div class="stack">
       <span class="steps">Step 2 of 2 &middot; Identity</span>

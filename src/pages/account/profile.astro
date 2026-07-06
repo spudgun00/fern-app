@@ -19,7 +19,7 @@ if (journey && journey.state !== 'registered') return Astro.redirect('/account/v
 const existingGp = await getGpSharing(admin, account.id);
 const error = Astro.url.searchParams.get('error');
 ---
-<Layout title="Your profile — Fern" navVariant="onboarding" user={user} narrow>
+<Layout title="Your profile — Fern" navVariant="onboarding" user={user} narrow step={1}>
   <div class="wrap-narrow">
     <div class="stack">
       <span class="steps">Step 1 of 2 &middot; Profile</span>

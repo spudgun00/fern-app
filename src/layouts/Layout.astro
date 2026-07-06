@@ -2,6 +2,7 @@
 import '../styles/app.css';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
+import StepIndicator from '../components/StepIndicator.astro';
 
 // The shared app shell. Every patient + clinician surface renders into this:
 // the sitewide demo banner, the variant-aware nav, the content slot, and the
@@ -14,6 +15,10 @@ export interface Props {
   active?: string;
   /** Narrow the main content column (auth / onboarding / focused forms). */
   narrow?: boolean;
+  /** Phase E: when set, render the "Step N of M" journey indicator above the content. */
+  step?: number;
+  /** Optional label override for the step indicator. */
+  stepLabel?: string;
 }
 const {
   title = 'Fern patient zone',
@@ -22,6 +27,8 @@ const {
   user = null,
   active = '',
   narrow = false,
+  step,
+  stepLabel,
 } = Astro.props;
 ---
 <!doctype html>
@@ -42,6 +49,7 @@ const {
 <body>
   <a href="#main" class="skip-link">Skip to content</a>
   <Nav variant={navVariant} user={user} active={active} />
+  {step && <StepIndicator step={step} label={stepLabel} narrow={narrow} />}
   <main id="main" class={narrow ? 'page-narrow' : 'page'}>
     <slot />
   </main>

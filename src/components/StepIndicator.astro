@@ -1,0 +1,90 @@
+---
+// Phase E (legibility) — "Step N of M: <label>".
+//
+// A visible progress marker shown across every journey screen so a visitor always
+// knows where they are and what is next. Presentation only: it reads the step
+// number the page passes (or a state), renders the label from JOURNEY_STEPS, and a
+// simple segmented progress bar. No logic, no gating.
+import { JOURNEY_STEPS, JOURNEY_STEP_TOTAL, stepByNumber } from '../lib/journey/steps.ts';
+
+export interface Props {
+  /** 1-based step number for this screen. */
+  step: number;
+  /** Override the default label from JOURNEY_STEPS (rare). */
+  label?: string;
+  /** Match the page column width (narrow forms vs full pages). */
+  narrow?: boolean;
+}
+const { step, label, narrow = false } = Astro.props;
+const current = stepByNumber(step);
+const total = JOURNEY_STEP_TOTAL;
+const shown = label ?? current.label;
+---
+<nav class="stepbar" aria-label={`Step ${current.n} of ${total}: ${shown}`}>
+  <div class:list={['stepbar-inner', narrow ? 'wrap-narrow' : 'wrap']}>
+    <p class="stepbar-text">
+      <span class="stepbar-count">Step {current.n} of {total}</span>
+      <span class="stepbar-sep" aria-hidden="true">&middot;</span>
+      <span class="stepbar-label">{shown}</span>
+    </p>
+    <ol class="stepbar-track">
+      {JOURNEY_STEPS.map((s) => (
+        <li
+          class:list={['stepbar-seg', { done: s.n < current.n, active: s.n === current.n }]}
+          aria-hidden="true"
+        ></li>
+      ))}
+    </ol>
+  </div>
+</nav>
+
+<style>
+  .stepbar {
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--cream-2) 60%, transparent);
+  }
+  .stepbar-inner {
+    padding-top: 14px;
+    padding-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stepbar-text {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0;
+  }
+  .stepbar-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--soft);
+  }
+  .stepbar-sep { color: var(--soft); }
+  .stepbar-label {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--navy);
+  }
+  .stepbar-track {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 6px;
+  }
+  .stepbar-seg {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border);
+  }
+  /* Periwinkle carries progress, matching the app's confirmation surface. */
+  .stepbar-seg.done { background: var(--peri); }
+  .stepbar-seg.active { background: var(--navy); }
+</style>

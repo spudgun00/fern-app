@@ -59,7 +59,7 @@ const booked = journey?.state === 'consult_booked' || journey?.state === 'consul
 const flags = flagsFromEnv(env);
 ---
 
-<Layout title="Your intake — Fern" navVariant="patient" user={user} narrow>
+<Layout title="Your intake — Fern" navVariant="patient" user={user} narrow step={3}>
   <div class="wrap-narrow">
     {
       ref && decision ? (

@@ -1633,6 +1633,40 @@ Two demo-hygiene fixes shipped alongside Phase D so a reviewer never lands on ra
   harness. Proven on the dev server: flag off -> the four dev routes 404, `/demo` unaffected,
   a throwaway signup+login lands on `/account/profile`; flag on -> the harness is reachable.
 
+## Phase E done (legibility — the in-app "Step N of M" journey indicator)
+
+Showcase-playbook Phase E (`docs/fern-showcase-playbook.md` §4/§7), the fern-app half.
+Built + proven by `npm test` + `astro build` + a live dev render. NOT pushed. A visible
+step indicator now runs across every journey screen so a visitor always knows where they
+are and what is next. Presentation only — no journey/decision/gate change.
+
+- **One pure resolver (`src/lib/journey/steps.ts`), unit-tested like `cta.ts`/`start.ts`:**
+  `JOURNEY_STEPS` (the SIX patient-facing steps — Create your account / Verify your identity
+  / Your health questions / Your health screen / Clinician review / Treatment and delivery),
+  `JOURNEY_STEP_TOTAL`, `stepByNumber` (clamps out-of-range), and `stepForState` (maps each
+  fine-grained `JourneyState` to its coarse display step). The six steps are a human-readable
+  GROUPING of the states for display, NOT a second state machine — screening + payment fold
+  under "Your health screen", the review queue / consult / approval under "Clinician review",
+  issuing / dispensing / delivered / member under "Treatment and delivery".
+- **`src/components/StepIndicator.astro`** — renders `Step N of M: <label>` + a six-segment
+  progress bar (periwinkle = done, navy = active, the app's confirmation surface), width-matched
+  to the page column (`narrow`). `Layout.astro` gained an optional `step` (+ `stepLabel`) prop
+  and renders the indicator above the content slot when set — so a page opts in with one prop.
+- **Wired across the walk** (each page's frontmatter unchanged bar the `step={N}` prop): signup +
+  `account/profile` (1), `account/verify` (+ `verify/mock`, `verify/complete`) (2), `intake` (3),
+  `checkout` (+ `checkout/complete`), `screening`, `account/billing` (+ `billing/complete`,
+  `billing/mock`, `billing/mock-portal`) (4), `consult` (+ `consult/book/mock`, `book/complete`,
+  `room/mock`) (5), `treatment` (6). The `/dashboard` hub stub (a `Coming` placeholder, not a
+  linear step) is deliberately left without one.
+- **HARD LINE untouched:** the indicator drives no transition and gates nothing; the journey
+  machine + `decideClinicianAction`/`decideConsultAction` are unchanged. `RX_ISSUED_PREDECESSORS`
+  stays `['approved','consult_done']`; the 3 hard-line tests are unchanged and green.
+- **Proven:** `test/journey-steps.test.ts` (labels carry no medicine/clinical term; every
+  `JourneyState` maps to a valid 1..6 step; the coarse grouping is locked) — `npm test` green
+  (`journey-steps` + the hard-line `journey.test.ts` pass together). `astro build` clean (every
+  journey page compiles with the `step` prop). Live dev render: `/signup` shows
+  `Step 1 of 6: Create your account` (aria-label + visible text). Do not push.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

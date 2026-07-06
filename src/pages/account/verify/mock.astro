@@ -12,7 +12,7 @@ const session = Astro.url.searchParams.get('session') ?? '';
 const ret = Astro.url.searchParams.get('return') ?? '/account/verify/complete';
 ---
 
-<Layout title="ID check — Fern" navVariant="onboarding" user={user} narrow>
+<Layout title="ID check — Fern" navVariant="onboarding" user={user} narrow step={2}>
   <div class="wrap-narrow">
     <div class="stack">
       <span class="pill pill-soft">Demo stand-in</span>

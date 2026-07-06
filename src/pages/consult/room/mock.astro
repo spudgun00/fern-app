@@ -11,7 +11,7 @@ if (!user) return Astro.redirect('/login');
 const room = Astro.url.searchParams.get('room') ?? '';
 ---
 
-<Layout title="Consult room — Fern" navVariant="patient" user={user} narrow>
+<Layout title="Consult room — Fern" navVariant="patient" user={user} narrow step={5}>
   <div class="wrap-narrow">
     <div class="stack">
       <span class="pill pill-soft">Demo stand-in</span>

@@ -12,7 +12,7 @@ const customer = Astro.url.searchParams.get('customer') ?? '';
 const ret = Astro.url.searchParams.get('return') ?? '/account/billing';
 ---
 
-<Layout title="Manage membership — Fern" navVariant="patient" user={user} narrow>
+<Layout title="Manage membership — Fern" navVariant="patient" user={user} narrow step={4}>
   <div class="wrap-narrow">
     <div class="stack">
       <span class="pill pill-soft">Demo stand-in</span>
