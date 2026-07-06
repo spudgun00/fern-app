@@ -1565,9 +1565,12 @@ Built + proven by `npm test` (+4 tests) + a live dev render walk. NOT deployed, 
 - **Proven:** `test/start.test.ts` (4) covers every branch; live dev — `/start` cold with
   purchase ON `302 -> /signup`, purchase OFF `302 -> the waitlist`. The marketing-site half
   (repoint the Start CTA at `app.fern.care/start`) is the fern repo's Phase C commit.
-- **Not yet deployed:** `git push` + `npm run deploy` are James's call (Phase B — the
-  `app.fern.care` custom domain on the Worker — is the DNS piece that must land before the
-  live CTA resolves). The hard line is untouched (`/start` only redirects; no journey/decision code).
+- **DEPLOYED 2026-07-06** (commit `832caf7`, pushed `d2-patient-surfaces`; Worker version
+  `d335cf5f`). Phase B is effectively done — `app.fern.care` already routes to this Worker as a
+  custom domain. Live proof: `https://app.fern.care/start` and
+  `https://fern-app.jimgill.workers.dev/start` both `302 -> /signup` (cold visitor begins
+  account creation on the canonical domain). Demo flags stay on (the earlier flag-flip deploy).
+  The hard line is untouched (`/start` only redirects; no journey/decision code).
 
 ## Verifying
 
