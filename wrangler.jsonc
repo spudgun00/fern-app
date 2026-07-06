@@ -47,6 +47,7 @@
     "OTC_CATEGORIES": "intimate-vaginal,menopause-supplements,bone-muscle,heart-brain,energy-focus,sleep-calm,skin-hair,gut-general",
     "MEDICATION_BILLING": "per_fill",
     "WAITLIST_URL": "https://fern.care/#join",
-    "GLP_CONSULT_REQUIRED": "false"
+    "GLP_CONSULT_REQUIRED": "false",
+    "DEMO_AUTO_APPROVE": "false"
   }
 }

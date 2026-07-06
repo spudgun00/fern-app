@@ -1667,6 +1667,47 @@ are and what is next. Presentation only — no journey/decision/gate change.
   journey page compiles with the `step` prop). Live dev render: `/signup` shows
   `Step 1 of 6: Create your account` (aria-label + visible text). Do not push.
 
+## Phase F done (demo clinician loop — the mock clinician closes the walk to delivered)
+
+Showcase-playbook Phase F (`docs/fern-showcase-playbook.md` §4/§7). Built + proven by
+`npm test` + `astro build` + a full live dev-server walk. NOT pushed. Most of Phase F
+was ALREADY built (P3 review queue + `decideClinicianAction`, P4 dispensing, the D4 `/demo`
+reviewer panel + role switch); this phase EXPOSES + POLISHES it for a hands-free demo walk
+and closes the two gaps. **The hard line is untouched** — `RX_ISSUED_PREDECESSORS` stays
+`['approved','consult_done']`, the 3 hard-line tests are unchanged and green; nothing here
+touches `decideClinicianAction` / the journey machine.
+
+- **Gap 1 — the loop could not reach `delivered` in the demo.** `dispensing -> delivered`
+  runs through `advanceDispensing` (mock-only; the real CloudRx pushes its own status), which
+  was reachable ONLY via `/api/dev/advance-dispense` — DEV_TOOLS-gated, so hidden in the
+  demo (Phase D follow-up). Added `src/pages/api/demo/advance-dispense.ts` (under the
+  ungated `/api/demo/*`, same lib call) and repointed the `/treatment` advance control at it,
+  shown whenever dispensing is MOCK (not DEV_TOOLS-gated) as a polished **"Demo stand-in"**
+  affordance. It only walks `dispensing -> delivered`, never near `rx_issued`, and is a no-op
+  for any non-mock impl.
+- **Gap 2 — the new "auto-approve after 10s" toggle.** New env flag `DEMO_AUTO_APPROVE`
+  (`env.ts`, `wrangler.jsonc` var, **OFF by default**). When on, the clinician fast-lane
+  intake review (`clinician/intake/[id].astro`) shows a 10s countdown banner that
+  auto-submits the SAME Approve form (a `<script is:inline>` timer that prefills a reason if
+  empty, then clicks the existing Approve button); a Cancel button stops it. It only offers
+  when Approve is actually available (not decided, not screening-blocked). It is a UI timer
+  over the existing form — the server still runs the full clinician-decision hard line, so
+  `rx_issued` is still reached only through the (mock) clinician Approve action.
+- **Proven — `test/phase-f-demo-loop.test.ts` (3):** the flag parses OFF by default / ON only
+  on `'true'`; the full loop end to end (a fast-lane patient in the review queue -> clinician
+  Approve issues the script + reaches `rx_issued` -> `dispenseIssuedScript` -> `dispensing` ->
+  `advanceDispensing` steps to `delivered`), with NO script before the clinician action and
+  `rx_issued` predecessors unchanged. `npm test` green (with the unchanged hard-line
+  `journey.test.ts` + `p3`/`p4`). `astro build` clean.
+- **Proven on the live dev server (full walk, no real doctor):** throwaway signup -> apply the
+  `fast-approve` persona (lands as the mock clinician with a patient in the queue) -> open MY
+  queue card -> the "Demo auto-approve" banner renders with `DEMO_AUTO_APPROVE=true` -> Approve
+  -> switch to patient -> `/treatment` shows "Your current prescription" + "Sent to the
+  pharmacy" + the "Demo stand-in" advance control (`/api/demo/advance-dispense`) -> advance ->
+  "Dispatched" -> **"Delivered"** (solid status pill; journey `delivered`). Every screen carries
+  the Phase E "Step N of 6" indicator. (Global-queue note from D4 still applies: target your own
+  card by its `account_id` prefix; a shared-DB queue shows many.)
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

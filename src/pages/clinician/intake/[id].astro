@@ -41,6 +41,12 @@ const weight = weightCheckFromAnswers(intake?.payload.answers as Record<string, 
 const error = Astro.url.searchParams.get('error');
 const decided = item.status !== 'pending';
 
+// Phase F — the demo-only "auto-approve after 10s" convenience (env-gated, off by
+// default). It only offers when Approve itself is available (not decided, not
+// blocked by the screening guard). It is a UI timer over the SAME Approve action a
+// clinician clicks; the hard line is untouched.
+const autoApprove = env.DEMO_AUTO_APPROVE && !decided && !review.blocked;
+
 const symptomLabel = (symptomId: string) =>
   SYMPTOM_OPTIONS.find((s) => s.id === symptomId)?.label ?? symptomId;
 const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
@@ -184,7 +190,24 @@ const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
             A clinician makes this decision. Approving issues the script; nothing
             is prescribed without this action. Every decision records your reason.
           </p>
-          <form method="POST" action="/api/clinician/decide" class="stack">
+
+          {autoApprove && (
+            <div class="notice notice-info auto-approve" id="auto-approve">
+              <div class="aa-row">
+                <span class="pill">Demo auto-approve</span>
+                <span class="aa-text">
+                  Approving as the clinician in <strong id="aa-count">10</strong>s. This
+                  runs the same Approve action a clinician clicks; it does not bypass the
+                  clinician decision.
+                </span>
+              </div>
+              <button type="button" class="btn btn-ghost aa-cancel" id="aa-cancel">
+                Cancel auto-approve
+              </button>
+            </div>
+          )}
+
+          <form method="POST" action="/api/clinician/decide" class="stack" id="decide-form">
             <input type="hidden" name="queueItemId" value={item.id} />
 
             <label class="field">
@@ -220,6 +243,7 @@ const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
                 name="action"
                 value="approve"
                 class="btn btn-pri"
+                id="approve-btn"
                 disabled={review.blocked}
               >
                 Approve + issue script
@@ -236,6 +260,42 @@ const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
       )
     }
   </div>
+
+  {
+    autoApprove && (
+      <script is:inline>
+        // Phase F demo convenience: after a 10s countdown, submit the SAME clinician
+        // Approve. A recorded reason is required, so prefill one if the clinician has
+        // not typed their own. Cancel stops the timer. This is a UI timer over the
+        // existing form; the server still runs the full clinician-decision hard line.
+        (() => {
+          const banner = document.getElementById('auto-approve');
+          const countEl = document.getElementById('aa-count');
+          const cancelBtn = document.getElementById('aa-cancel');
+          const approveBtn = document.getElementById('approve-btn');
+          const reason = document.querySelector('#decide-form [name="reason"]');
+          if (!banner || !countEl || !cancelBtn || !approveBtn) return;
+          let left = 10;
+          const tick = setInterval(() => {
+            left -= 1;
+            countEl.textContent = String(Math.max(left, 0));
+            if (left <= 0) {
+              clearInterval(tick);
+              if (reason && !reason.value.trim()) {
+                reason.value =
+                  'Auto-approved in the demo walk-through: clear continuing picture, no contraindications.';
+              }
+              approveBtn.click();
+            }
+          }, 1000);
+          cancelBtn.addEventListener('click', () => {
+            clearInterval(tick);
+            banner.remove();
+          });
+        })();
+      </script>
+    )
+  }
 </Layout>
 
 <style>
@@ -260,6 +320,11 @@ const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No');
   .picture dd { margin: 0; color: var(--text); }
 
   .decision-copy { margin: 8px 0 6px; }
+
+  .auto-approve { margin: 6px 0 18px; display: flex; flex-direction: column; gap: 12px; }
+  .auto-approve .aa-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .auto-approve .aa-text { font-size: 14.5px; }
+  .auto-approve .aa-cancel { align-self: flex-start; }
   .rx { margin-top: 4px; }
   .rx .field:last-child { margin-bottom: 0; }
   .qty input { max-width: 120px; }

@@ -205,15 +205,15 @@ const showAddons = flags.purchaseEnabled && Boolean(view.dispense);
             </div>
           )}
 
-          {env.DEV_TOOLS_ENABLED && isMock && view.dispense && view.status?.status !== 'delivered' && (
+          {isMock && view.dispense && view.status?.status !== 'delivered' && (
             <div class="dev-panel">
-              <span class="pill pill-soft">Demo control</span>
+              <span class="pill pill-soft">Demo stand-in</span>
               <p class="muted dev-copy">
                 Step the dispensing status forward (submitted &rarr; dispatched
-                &rarr; delivered). In the live service the pharmacy pushes these
-                updates itself.
+                &rarr; delivered) to see delivery complete. In the live service the
+                pharmacy pushes these updates itself.
               </p>
-              <form method="POST" action="/api/dev/advance-dispense">
+              <form method="POST" action="/api/demo/advance-dispense">
                 <button type="submit" class="btn btn-ghost">Advance dispensing status</button>
               </form>
             </div>

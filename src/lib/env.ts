@@ -105,6 +105,14 @@ export interface AppEnv {
   // to use the harness. The reviewer-facing demo panel (/demo, /api/demo/*) is
   // separate and NOT gated by this. Non-secret var.
   DEV_TOOLS_ENABLED: boolean;
+  // Phase F — the demo-only "auto-approve after 10s" convenience. OFF by default.
+  // When on, the clinician fast-lane intake review shows a 10s countdown that
+  // auto-submits the SAME Approve action (a hands-free walk-through). It NEVER
+  // weakens the hard line: the auto-submit still posts the clinician Approve to
+  // /api/clinician/decide with a recorded reason, so rx_issued is still reached
+  // only through the (mock) clinician action. Purely a UI timer over the existing
+  // form; a Cancel button stops it. Non-secret var.
+  DEMO_AUTO_APPROVE: boolean;
 }
 
 const DEFAULT_EMAIL_FROM = 'Fern <noreply@mail.fern.care>';
@@ -166,6 +174,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const waitlistUrl = get('WAITLIST_URL');
   const previewPass = get('PREVIEW_PASS');
   const devToolsEnabled = boolFlag(get('DEV_TOOLS_ENABLED'));
+  const demoAutoApprove = boolFlag(get('DEMO_AUTO_APPROVE'));
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
   // keeping them out of REQUIRED lets mock dev + tests run without them.
@@ -260,5 +269,6 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     MEDICATION_BILLING: medicationBilling,
     PREVIEW_PASS: previewPass != null && String(previewPass) ? String(previewPass) : undefined,
     DEV_TOOLS_ENABLED: devToolsEnabled,
+    DEMO_AUTO_APPROVE: demoAutoApprove,
   };
 }
