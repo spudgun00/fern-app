@@ -149,4 +149,39 @@ Everything built, nothing public. Turn on per category for production once its c
 
 ---
 
+## Appendix — energy-focus worked example (the "focus gum" model, made compliant)
+
+**The trap, stated plainly:** the US focus-gum model (NeuroGum and similar) is built on **caffeine + L-theanine**, and **neither has an authorised GB/EU health claim**. Caffeine's alertness/concentration claims were vetoed by the European Parliament in 2016 and never authorised; L-theanine has none. So you cannot claim these products "improve focus" on the basis of their hero ingredients, and you certainly cannot tie them to menopause.
+
+**The compliant pattern:** list caffeine and L-theanine as **factual ingredients only** (no claim), add **B-vitamins or minerals that DO carry authorised cognitive/tiredness claims**, and make the claim on those. The product being sold on a menopause clinic does the association work your copy legally cannot.
+
+**Authorised claims you can use (verbatim, tied to the nutrient present):**
+
+| Nutrient | Authorised claim (verbatim) |
+|---|---|
+| Vitamin B12 / B6 | contributes to normal psychological function |
+| Vitamin B12 / B6 / niacin / riboflavin / folate / pantothenic acid / vitamin C / magnesium / iron | contributes to the reduction of tiredness and fatigue |
+| Pantothenic acid (B5) | contributes to normal mental performance |
+| Iron / zinc / iodine | contributes to normal cognitive function |
+| Magnesium | contributes to normal psychological function |
+
+**Example catalogue entries (`energy-focus`, all `placeholder: true` pending compliance pass):**
+
+| Product | Ingredients | authorisedClaims[] | What you must NOT say |
+|---|---|---|---|
+| Focus & Clarity Gum | caffeine, L-theanine, **added B6 + B12** | "Vitamin B6 contributes to normal psychological function"; "Vitamin B12 contributes to the reduction of tiredness and fatigue" | "improves focus", "beats brain fog", anything off the caffeine/L-theanine |
+| Daily Mind Complex (capsules) | B-complex, iron, zinc | "Iron contributes to normal cognitive function"; "Pantothenic acid contributes to normal mental performance" | "for menopause concentration", "sharpens the mind" |
+| Magnesium Calm | magnesium glycinate | "Magnesium contributes to normal psychological function"; "Magnesium contributes to the reduction of tiredness and fatigue" | "for menopause anxiety", "calms hormones" |
+
+`patientDescription` stays factual: "A chewable gum with caffeine, L-theanine and added B-vitamins." The claim lives only in `authorisedClaims[]`, only on the nutrient that earns it.
+
+**Compliance-pass checklist for this category (each product):**
+- Every ingredient permitted in GB food supplements at the dose used (US doses/ingredients are often not GB-legal, do not relist a US catalogue).
+- To bear a nutrient claim, the product must contain a **significant amount** of that nutrient (generally 15% of the NRV per serving). A trace of B12 does not license the B12 claim.
+- No claim based on caffeine or L-theanine.
+- No condition (menopause) claim anywhere.
+- Caffeinated products carry the required high-caffeine labelling/warning where thresholds apply.
+
+---
+
 *Fern · unified shop + basket spec · internal · demo-grade, flag-gated, mock fulfilment. Extends the checkout spec. Compliance clears OTC copy per category before any category flag goes public.*

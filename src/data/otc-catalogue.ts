@@ -342,6 +342,51 @@ export const OTC_PRODUCTS: OtcProduct[] = [
     placeholder: true,
     complianceFlag: 'No authorised claim for adaptogens; borderline botanical blend — factual copy only, clear individually.',
   },
+  // The "focus gum" model made compliant (spec appendix): caffeine + L-theanine are
+  // FACTUAL ingredients only — neither has an authorised GB/EU claim, so no claim
+  // rests on them. The claim lives only on the added B6 / B12 that earn it.
+  {
+    id: 'focus-clarity-gum',
+    name: 'Focus & Clarity Gum',
+    category: 'energy-focus',
+    price: '£14*',
+    patientDescription:
+      'A chewable gum with caffeine, L-theanine and added B-vitamins.',
+    authorisedClaims: [
+      'Vitamin B6 contributes to normal psychological function',
+      'Vitamin B12 contributes to the reduction of tiredness and fatigue',
+    ],
+    flag: 'energy-focus',
+    placeholder: true,
+    complianceFlag: 'Contains caffeine — no claim rests on caffeine or L-theanine (neither is authorised); the claim is on B6/B12 only, and the product must contain a significant amount (>=15% NRV) per serving to bear it. Caffeinated: carry the required high-caffeine labelling where thresholds apply.',
+  },
+  {
+    id: 'daily-mind-complex',
+    name: 'Daily Mind Complex',
+    category: 'energy-focus',
+    price: '£16*',
+    patientDescription:
+      'A daily capsule providing a B-complex with iron and zinc.',
+    authorisedClaims: [
+      'Iron contributes to normal cognitive function',
+      'Pantothenic acid contributes to normal mental performance',
+    ],
+    flag: 'energy-focus',
+    placeholder: true,
+  },
+  {
+    id: 'magnesium-calm',
+    name: 'Magnesium Calm',
+    category: 'energy-focus',
+    price: '£12*',
+    patientDescription: 'A daily magnesium glycinate supplement.',
+    authorisedClaims: [
+      'Magnesium contributes to normal psychological function',
+      'Magnesium contributes to the reduction of tiredness and fatigue',
+    ],
+    flag: 'energy-focus',
+    placeholder: true,
+  },
 
   // --- Sleep & calm (NO melatonin — POM; no authorised sleep claim) ---
   {
