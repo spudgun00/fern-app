@@ -1670,7 +1670,10 @@ are and what is next. Presentation only — no journey/decision/gate change.
 ## Phase F done (demo clinician loop — the mock clinician closes the walk to delivered)
 
 Showcase-playbook Phase F (`docs/fern-showcase-playbook.md` §4/§7). Built + proven by
-`npm test` + `astro build` + a full live dev-server walk. NOT pushed. Most of Phase F
+`npm test` + `astro build` + a full live dev-server walk. **Committed + PUSHED**
+(`d2-patient-surfaces`, commit `3a98486`); NOT yet deployed — the fern-app Worker ships via
+`npm run deploy` (wrangler), not a git push, so `app.fern.care` runs the prior version until
+a deploy. Most of Phase F
 was ALREADY built (P3 review queue + `decideClinicianAction`, P4 dispensing, the D4 `/demo`
 reviewer panel + role switch); this phase EXPOSES + POLISHES it for a hands-free demo walk
 and closes the two gaps. **The hard line is untouched** — `RX_ISSUED_PREDECESSORS` stays
