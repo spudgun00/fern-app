@@ -32,10 +32,12 @@ const weightCta = entryCta('weight', flags);
             <a href="/treatment" class="btn btn-ghost">Your treatment</a>
           </div>
         </div>
-        <p class="soft devline">
-          Building this demo? The <a href="/dev/harness" class="link">dev harness</a> seeds and
-          drives the journeys.
-        </p>
+        {env.DEV_TOOLS_ENABLED && (
+          <p class="soft devline">
+            Building this demo? The <a href="/dev/harness" class="link">dev harness</a> seeds and
+            drives the journeys.
+          </p>
+        )}
       </div>
     </Layout>
   ) : (

@@ -40,6 +40,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const gated = await previewGateRedirect(context, env.PREVIEW_PASS);
   if (gated) return gated;
 
+  // The raw developer harness (/dev/*, /api/dev/*) is unreachable unless
+  // DEV_TOOLS_ENABLED is on: in the demo/preview it 404s so no reviewer can land
+  // on it. The reviewer-facing demo panel (/demo, /api/demo/*) is NOT gated here.
+  if (!env.DEV_TOOLS_ENABLED) {
+    const p = new URL(context.request.url).pathname;
+    if (p === '/dev' || p.startsWith('/dev/') || p.startsWith('/api/dev/')) {
+      return new Response('Not found', { status: 404 });
+    }
+  }
+
   const supabase = createSupabaseServerClient(context, env);
   context.locals.supabase = supabase;
 

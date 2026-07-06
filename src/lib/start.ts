@@ -33,8 +33,23 @@ export function startDestination(
 ): string {
   if (!flags.purchaseEnabled) return flags.waitlistUrl;
   if (!ctx.hasSession) return ACCOUNT_HREF; // cold visitor: create an account
-  if (ctx.role === 'clinician') return '/clinician';
-  switch (ctx.state) {
+  return resumeStep(ctx.role, ctx.state);
+}
+
+// Where an ALREADY-AUTHENTICATED visitor lands (post log-in, or hitting
+// /login|/signup while signed in). Unlike startDestination this has NO purchase
+// gate and NO cold-visitor branch: a signed-in user always lands IN the app at
+// their current step — never the waitlist, and never the P0 dev harness (which
+// is the old plumbing default this replaces). A clinician goes to the console.
+export function postLoginDestination(ctx: Pick<StartContext, 'role' | 'state'>): string {
+  return resumeStep(ctx.role, ctx.state);
+}
+
+// The resume map shared by both resolvers: current journey state -> the step to
+// pick up at, never a mid-flow dead end. Anyone past intake goes to their hub.
+function resumeStep(role: StartContext['role'], state: StartContext['state']): string {
+  if (role === 'clinician') return '/clinician';
+  switch (state) {
     case 'registered':
       return '/account/profile';
     case 'id_pending':

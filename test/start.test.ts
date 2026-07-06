@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { startDestination } from '../src/lib/start';
+import { startDestination, postLoginDestination } from '../src/lib/start';
 
 // ===========================================================================
 // Phase C — the /start handoff resolver. Pure, unit-tested in isolation (like
@@ -33,5 +33,27 @@ describe('startDestination', () => {
     expect(startDestination(on, { hasSession: true, role: 'patient', state: 'intake_submitted' })).toBe('/dashboard');
     expect(startDestination(on, { hasSession: true, role: 'patient', state: 'delivered' })).toBe('/dashboard');
     expect(startDestination(on, { hasSession: true, role: 'patient', state: null })).toBe('/dashboard');
+  });
+});
+
+describe('postLoginDestination (authenticated landing — never the dev harness)', () => {
+  it('a clinician lands on the console', () => {
+    expect(postLoginDestination({ role: 'clinician', state: null })).toBe('/clinician');
+  });
+
+  it('a patient resumes at their current onboarding step', () => {
+    expect(postLoginDestination({ role: 'patient', state: 'registered' })).toBe('/account/profile');
+    expect(postLoginDestination({ role: 'patient', state: 'id_pending' })).toBe('/account/verify');
+    expect(postLoginDestination({ role: 'patient', state: 'id_verified' })).toBe('/intake');
+    expect(postLoginDestination({ role: 'patient', state: 'intake_submitted' })).toBe('/dashboard');
+    expect(postLoginDestination({ role: 'patient', state: 'delivered' })).toBe('/dashboard');
+  });
+
+  it('never routes to the dev harness or the waitlist (no purchase gate)', () => {
+    for (const state of ['registered', 'id_verified', 'delivered', null] as const) {
+      const dest = postLoginDestination({ role: 'patient', state });
+      expect(dest.startsWith('/')).toBe(true); // an in-app path, not an external waitlist URL
+      expect(dest).not.toContain('/dev/');
+    }
   });
 });

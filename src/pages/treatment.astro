@@ -205,7 +205,7 @@ const showAddons = flags.purchaseEnabled && Boolean(view.dispense);
             </div>
           )}
 
-          {isMock && view.dispense && view.status?.status !== 'delivered' && (
+          {env.DEV_TOOLS_ENABLED && isMock && view.dispense && view.status?.status !== 'delivered' && (
             <div class="dev-panel">
               <span class="pill pill-soft">Demo control</span>
               <p class="muted dev-copy">

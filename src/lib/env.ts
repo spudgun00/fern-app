@@ -98,6 +98,13 @@ export interface AppEnv {
   // `wrangler secret put PREVIEW_PASS`), never PUBLIC_. Entirely separate from
   // Supabase patient auth. See src/lib/preview-gate.ts.
   PREVIEW_PASS?: string;
+  // The raw developer harness + its dev-only APIs (/dev/*, /api/dev/*: seed a
+  // scenario, flip role, advance mock dispensing) are gated behind this flag,
+  // OFF by default so they are UNREACHABLE in the demo/preview (the middleware
+  // 404s them; the fenced dev controls hide). Set DEV_TOOLS_ENABLED=true locally
+  // to use the harness. The reviewer-facing demo panel (/demo, /api/demo/*) is
+  // separate and NOT gated by this. Non-secret var.
+  DEV_TOOLS_ENABLED: boolean;
 }
 
 const DEFAULT_EMAIL_FROM = 'Fern <noreply@mail.fern.care>';
@@ -158,6 +165,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     String(get('MEDICATION_BILLING') ?? '').toLowerCase() === 'bundled' ? 'bundled' : 'per_fill';
   const waitlistUrl = get('WAITLIST_URL');
   const previewPass = get('PREVIEW_PASS');
+  const devToolsEnabled = boolFlag(get('DEV_TOOLS_ENABLED'));
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
   // keeping them out of REQUIRED lets mock dev + tests run without them.
@@ -251,5 +259,6 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     GLP_CONSULT_REQUIRED: glpConsultRequired,
     MEDICATION_BILLING: medicationBilling,
     PREVIEW_PASS: previewPass != null && String(previewPass) ? String(previewPass) : undefined,
+    DEV_TOOLS_ENABLED: devToolsEnabled,
   };
 }

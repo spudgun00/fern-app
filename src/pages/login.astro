@@ -1,6 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
-if (Astro.locals.user) return Astro.redirect('/dev/harness');
+import { createAdminClient } from '../lib/supabase/admin';
+import { authedLandingPath } from '../lib/landing';
+if (Astro.locals.user) {
+  return Astro.redirect(await authedLandingPath(createAdminClient(Astro.locals.env), Astro.locals.user.id));
+}
 const error = Astro.url.searchParams.get('error');
 ---
 <Layout title="Log in — Fern" navVariant="public" user={null} narrow>

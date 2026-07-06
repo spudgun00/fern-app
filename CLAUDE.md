@@ -1612,6 +1612,27 @@ whatever gated the app preview) with ONE shared cookie gate: enter the password 
   identical token derivation across both repos. **To activate:** `wrangler secret put
   PREVIEW_PASS` (same value on both the Pages project and this Worker), then `npm run deploy`.
 
+### Phase D follow-up (post-login landing + dev-tools gating)
+
+Two demo-hygiene fixes shipped alongside Phase D so a reviewer never lands on raw plumbing.
+
+- **Post-login routes to the journey, not the P0 dev harness.** `api/auth/login.ts`,
+  `login.astro` and `signup.astro` all hard-redirected to `/dev/harness`; they now resolve
+  through `authedLandingPath` (`src/lib/landing.ts`) -> `postLoginDestination` (`src/lib/start.ts`)
+  = the current onboarding step (`registered -> /account/profile`, `id_pending ->
+  /account/verify`, `id_verified -> /intake`, past intake -> `/dashboard`) or `/clinician`.
+  Unlike `startDestination` it has NO purchase gate + NO cold-visitor branch (an authenticated
+  user always lands in the app, never the waitlist, never the harness). Supabase auth untouched
+  — only the redirect target changed. +3 `postLoginDestination` tests.
+- **`/dev/*` gated behind `DEV_TOOLS_ENABLED` (env, default OFF).** The middleware 404s
+  `/dev`, `/dev/*` and `/api/dev/*` when the flag is off, so the raw harness + its seed/role/
+  advance APIs are UNREACHABLE in the demo/preview; the two in-UI references (the homepage
+  harness line, the `/treatment` "Advance dispensing" control) hide too (no dead buttons). The
+  reviewer-facing demo panel (`/demo`, `/api/demo/*`) is SEPARATE and NOT gated by this. Set
+  `DEV_TOOLS_ENABLED=true` (a `.dev.vars` line locally, or a `wrangler.jsonc` var) to use the
+  harness. Proven on the dev server: flag off -> the four dev routes 404, `/demo` unaffected,
+  a throwaway signup+login lands on `/account/profile`; flag on -> the harness is reachable.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

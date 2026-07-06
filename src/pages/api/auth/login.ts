@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createAdminClient } from '../../../lib/supabase/admin';
-import { ensureAccount } from '../../../lib/accounts';
+import { authedLandingPath } from '../../../lib/landing';
 
 // Email + password log-in. Sets the cookie session and ensures an account +
 // journey row exist (covers users created out-of-band, e.g. a clinician seeded
@@ -22,9 +22,12 @@ export const POST: APIRoute = async (ctx) => {
   const {
     data: { user },
   } = await ctx.locals.supabase.auth.getUser();
-  if (user) {
-    await ensureAccount(createAdminClient(ctx.locals.env), user.id);
+  if (!user) {
+    return ctx.redirect('/login?error=' + encodeURIComponent('Log-in failed, please try again'));
   }
 
-  return ctx.redirect('/dev/harness');
+  // Land the patient at their current journey step (or the clinician console),
+  // never the P0 dev harness.
+  const dest = await authedLandingPath(createAdminClient(ctx.locals.env), user.id);
+  return ctx.redirect(dest);
 };
