@@ -1,0 +1,274 @@
+---
+// The demo consult "veil" (DEMO_CONSULT). A tasteful full-screen interstitial
+// that stands in for the live video call during the demo: state 1 "Your video
+// consultation is taking place" with the booking detail, then (after a short
+// beat or a click) state 2 "Your clinician is reviewing your case." It leaves the
+// patient at the awaiting-decision state — the clinician approves separately via
+// the reviewer console.
+//
+// HARD LINE: this is a UI waiting-state ONLY. It advances NO journey state and
+// calls NO decision code; it is reachable only when DEMO_CONSULT is on. With the
+// flag off it 404s and the real Daily join path is untouched.
+import Layout from '../../layouts/Layout.astro';
+import { createAdminClient } from '../../lib/supabase/admin';
+import { getBooking, getVideo } from '../../lib/adapters/factory';
+import { ensureAccount } from '../../lib/accounts';
+import { getConsultView } from '../../lib/consult/booking';
+import { DEMO_CLINICIAN_NAME, CONSULT_DURATION_LABEL } from '../../lib/consult/veil';
+
+const { user, env } = Astro.locals;
+if (!user) return Astro.redirect('/login');
+
+// Only reachable when the demo veil is switched on; otherwise there is no veil.
+if (!env.DEMO_CONSULT) return new Response('Not found', { status: 404 });
+
+const admin = createAdminClient(env);
+const account = await ensureAccount(admin, user.id);
+if (account.role === 'clinician') return Astro.redirect('/clinician');
+if (!account.core_patient_id) return Astro.redirect('/account/profile');
+
+const booking = getBooking(env, admin);
+const video = getVideo(env, admin);
+const view = await getConsultView(admin, booking, video, account.id);
+
+// The veil only makes sense for a patient with a booked consult. Anything else
+// goes back to the consult surface, which shows the right next step.
+const inRoom = view.state === 'consult_booked' || view.state === 'consult_done';
+if (!inRoom) return Astro.redirect('/consult');
+
+const slotLabel = view.slotAt ? new Date(view.slotAt).toLocaleString('en-GB') : null;
+---
+
+<Layout title="Your consultation — Fern" navVariant="patient" user={user} step={5}>
+  <div class="veil-wrap">
+    <div class="veil" data-veil>
+      <span class="demo-mark">Demo</span>
+
+      <!-- State 1: the consultation is taking place -->
+      <div class="state" data-state="1">
+        <span class="ring" aria-hidden="true"><span class="dot"></span></span>
+        <p class="eyebrow-inv">Assessed consultation</p>
+        <h1>Your video consultation is taking place</h1>
+        <p class="lede-inv">
+          You are in your consultation with your clinician. When it is complete,
+          your clinician will review your case and decide the next step.
+        </p>
+        <dl class="detail">
+          <div>
+            <dt>Clinician</dt>
+            <dd>{DEMO_CLINICIAN_NAME}</dd>
+          </div>
+          {slotLabel && (
+            <div>
+              <dt>Appointment</dt>
+              <dd>{slotLabel}</dd>
+            </div>
+          )}
+          <div>
+            <dt>Duration</dt>
+            <dd>{CONSULT_DURATION_LABEL}</dd>
+          </div>
+        </dl>
+        <button type="button" class="btn-inv" data-continue>Continue</button>
+        <p class="hint-inv">This screen advances on its own in a few moments.</p>
+      </div>
+
+      <!-- State 2: the clinician is reviewing -->
+      <div class="state" data-state="2" hidden>
+        <span class="ring" aria-hidden="true"><span class="dot"></span></span>
+        <p class="eyebrow-inv">Consultation complete</p>
+        <h1>Your clinician is reviewing your case</h1>
+        <p class="lede-inv">
+          Thank you. Your clinician is now reviewing your consultation and will make
+          a decision shortly. You do not need to stay on this screen; we will update
+          your treatment when the decision is made.
+        </p>
+        <a href="/consult" class="btn-inv">Return to your consultation</a>
+        <p class="hint-inv">You are now awaiting your clinician's decision.</p>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('[data-veil]');
+    if (!root) return;
+    var s1 = root.querySelector('[data-state="1"]');
+    var s2 = root.querySelector('[data-state="2"]');
+    var advanced = false;
+    function advance() {
+      if (advanced) return;
+      advanced = true;
+      s1.hidden = true;
+      s2.hidden = false;
+      root.classList.add('is-reviewing');
+    }
+    // Advance on a short beat OR on a click of Continue, whichever comes first.
+    var timer = setTimeout(advance, 6000);
+    var btn = root.querySelector('[data-continue]');
+    if (btn) {
+      btn.addEventListener('click', function () {
+        clearTimeout(timer);
+        advance();
+      });
+    }
+  })();
+</script>
+
+<style>
+  .veil-wrap {
+    /* Fill the viewport below the nav/banner for a full-screen feel. */
+    min-height: calc(100vh - 220px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 0;
+  }
+  .veil {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    background: var(--navy);
+    color: var(--inv);
+    border-radius: 20px;
+    padding: 56px 40px;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+    overflow: hidden;
+  }
+  .demo-mark {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--inv-muted);
+    border: 1px solid var(--border-d);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
+  .state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  /* [hidden] must win over the .state display rule (author styles beat the UA
+     [hidden] rule, so name it explicitly), else both states show at once. */
+  .state[hidden] {
+    display: none;
+  }
+  .veil h1 {
+    font-family: var(--disp);
+    font-size: 28px;
+    line-height: 1.2;
+    color: var(--inv);
+    margin: 0;
+    max-width: 24ch;
+  }
+  .eyebrow-inv {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--peri);
+    margin: 0;
+  }
+  .lede-inv {
+    color: var(--inv-muted);
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 46ch;
+  }
+  .hint-inv {
+    color: var(--inv-muted);
+    font-size: 13px;
+    margin: 4px 0 0;
+    opacity: 0.8;
+  }
+  .detail {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 14px;
+    margin: 8px 0 4px;
+    width: 100%;
+  }
+  .detail > div {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-d);
+    border-radius: 12px;
+    padding: 12px 16px;
+    min-width: 150px;
+  }
+  .detail dt {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--inv-muted);
+    margin: 0 0 4px;
+  }
+  .detail dd {
+    margin: 0;
+    font-size: 16px;
+    color: var(--inv);
+  }
+  /* The pulsing ring — a calm "live" indicator. */
+  .ring {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid var(--peri);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-bottom: 6px;
+  }
+  .ring .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--peri);
+  }
+  .ring::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px solid var(--peri);
+    opacity: 0.5;
+    animation: veilpulse 2.4s ease-out infinite;
+  }
+  @keyframes veilpulse {
+    0% { transform: scale(0.9); opacity: 0.5; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+  .btn-inv {
+    display: inline-block;
+    margin-top: 8px;
+    background: var(--inv);
+    color: var(--navy);
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 26px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn-inv:hover { opacity: 0.92; }
+  @media (max-width: 560px) {
+    .veil { padding: 44px 22px; }
+    .veil h1 { font-size: 23px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ring::before { animation: none; }
+  }
+</style>

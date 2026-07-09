@@ -1727,6 +1727,47 @@ touches `decideClinicianAction` / the journey machine.
   the Phase E "Step N of 6" indicator. (Global-queue note from D4 still applies: target your own
   card by its `account_id` prefix; a shared-DB queue shows many.)
 
+## Demo consult veil done (DEMO_CONSULT — a UI waiting-state stand-in for the live call)
+
+A demo-polish touch behind a new flag `DEMO_CONSULT` (env.ts, OFF by default in
+code; `wrangler.jsonc` var set `true` for the deployed demo, `.dev.vars` documented
+line default `false`). When ON, a patient with a booked consult who clicks "Join
+the video consultation" is taken to a tasteful full-screen interstitial instead of
+the video room: **state 1** "Your video consultation is taking place" with the
+booking detail (clinician persona **Dr Amara Okafor**, the booked slot, a nominal
+**20 minutes** duration), then — after a short beat (6s) OR a Continue click,
+whichever first — **state 2** "Your clinician is reviewing your case." It leaves the
+patient at the awaiting-decision state; the clinician approves separately via the
+reviewer console. A small "Demo" marker sits top-right; the Phase E "Step 5 of 6"
+indicator shows above it.
+
+- **Files:** `src/lib/consult/veil.ts` (the `DEMO_CLINICIAN_NAME` /
+  `CONSULT_DURATION_LABEL` constants + the pure `consultJoinTarget(demoConsult,
+  joinUrl)` resolver — returns `/consult/veil` only when the flag is on AND a room
+  exists, else the real join URL unchanged), `src/pages/consult/veil.astro` (the
+  interstitial; a UI-only page, 404s when the flag is off), and the Join-button
+  wiring in `src/pages/consult.astro`.
+- **HARD LINE untouched:** the veil is a UI waiting-state ONLY — it advances NO
+  journey transition and calls NO decision/adapter code. Proven live: after walking
+  the veil the patient is still at `consult_booked`. `RX_ISSUED_PREDECESSORS` stays
+  `['approved','consult_done']` (asserted). With the flag OFF the real Daily consult
+  path (`VIDEO_IMPL=daily`) is completely untouched — the Join button points at the
+  real room and `/consult/veil` 404s.
+- **Proven on the dev server (both flag states):** ON — full-consult persona -> pay
+  (mock) -> book (mock) -> `consult_booked` -> Join routes to `/consult/veil` ->
+  state 1 renders with Dr Amara Okafor / the slot / 20 minutes / the Demo mark ->
+  Continue -> state 2 "reviewing your case" / "awaiting your clinician's decision"
+  -> back on `/consult` the state is still `consult_booked`. OFF (restart) — the
+  Join button points at `/consult/room/mock?room=...` and `/consult/veil` returns
+  "Not found" for the signed-in patient. Tests: `test/demo-consult-veil.test.ts`
+  (flag default OFF, the `consultJoinTarget` branch table, the hard-line reassert)
+  + `journey.test.ts` green (the pure/logic set passes; the DB-backed files hit the
+  documented remote-dev-DB timeout, an infra limit not a code failure). `astro
+  build` clean. NOT pushed, NOT deployed.
+- **A CSS gotcha fixed during the live proof:** `.state { display: flex }` beat the
+  UA `[hidden]` rule, so both states rendered at once; added an explicit
+  `.state[hidden] { display: none }` so `hidden` wins.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

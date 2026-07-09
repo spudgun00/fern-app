@@ -48,6 +48,7 @@
     "MEDICATION_BILLING": "per_fill",
     "WAITLIST_URL": "https://fern.care/#join",
     "GLP_CONSULT_REQUIRED": "false",
-    "DEMO_AUTO_APPROVE": "false"
+    "DEMO_AUTO_APPROVE": "false",
+    "DEMO_CONSULT": "true"
   }
 }

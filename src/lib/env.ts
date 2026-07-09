@@ -113,6 +113,13 @@ export interface AppEnv {
   // only through the (mock) clinician action. Purely a UI timer over the existing
   // form; a Cancel button stops it. Non-secret var.
   DEMO_AUTO_APPROVE: boolean;
+  // Demo consult "veil". OFF by default. When on, a patient with a booked consult
+  // who clicks Join is shown a tasteful full-screen interstitial (a waiting-state
+  // stand-in for the live call) instead of the video room; the clinician still
+  // decides separately via the reviewer console. It is a UI waiting-state ONLY: it
+  // touches no journey transition and no adapter, so with it OFF the real Daily
+  // consult path (VIDEO_IMPL=daily) is completely untouched. Non-secret var.
+  DEMO_CONSULT: boolean;
 }
 
 const DEFAULT_EMAIL_FROM = 'Fern <noreply@mail.fern.care>';
@@ -175,6 +182,7 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
   const previewPass = get('PREVIEW_PASS');
   const devToolsEnabled = boolFlag(get('DEV_TOOLS_ENABLED'));
   const demoAutoApprove = boolFlag(get('DEMO_AUTO_APPROVE'));
+  const demoConsult = boolFlag(get('DEMO_CONSULT'));
 
   // The Stripe keys are required ONLY when the Stripe identity impl is selected;
   // keeping them out of REQUIRED lets mock dev + tests run without them.
@@ -270,5 +278,6 @@ export function readEnv(runtimeEnv?: Record<string, unknown>): AppEnv {
     PREVIEW_PASS: previewPass != null && String(previewPass) ? String(previewPass) : undefined,
     DEV_TOOLS_ENABLED: devToolsEnabled,
     DEMO_AUTO_APPROVE: demoAutoApprove,
+    DEMO_CONSULT: demoConsult,
   };
 }
