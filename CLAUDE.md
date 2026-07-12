@@ -1768,6 +1768,51 @@ indicator shows above it.
   UA `[hidden]` rule, so both states rendered at once; added an explicit
   `.state[hidden] { display: none }` so `hidden` wins.
 
+## Demo walk scripts done (Playwright screen-recording of the full happy path, both doors)
+
+Two deterministic, human-paced Playwright scripts under `scripts/demo-walk/` that
+drive the REAL Fern UI end to end to `delivered`, for screen recording. They only
+click/type on the actual pages; the only "demo" endpoints they touch are the same
+mock-only reviewer affordances the `/demo` panel exposes. **They do NOT bypass the
+guard:** a clinician still issues every script, the mock screen advances only as a
+real lab would (which is what flips the screening guard to allowed), and the
+medication charge gates `rx_issued -> dispensing`, never `rx_issued`.
+
+- **`npm run demo:menopause`** (flow A, full-lane consult): home -> menopause door
+  -> signup -> mock ID -> intake (initiation -> full lane) -> pay the consult fee
+  (mock) -> book -> **Join the DEMO_CONSULT veil** (both states) -> [switch to the
+  mock clinician] Issue at the consult -> [back as patient] confirm + pay the
+  medication (Journey F) -> **advance dispensing to Delivered** -> add an OTC item
+  to the basket.
+- **`npm run demo:weight`** (flow B, screening-led): home -> weight door -> signup
+  -> mock ID -> intake -> pay the weight programme on `/checkout` (orders the
+  at-home screen) -> **advance the mock screen to results-ready** -> pay the consult
+  fee -> book -> Join the veil -> Issue -> pay medication -> Delivered -> add OTC.
+- **Config (env):** `BASE_URL` defaults to the deployed demo
+  (`https://fern-app.jimgill.workers.dev`); `HEADLESS`, `PACE` (ms between steps,
+  default 1400), `SLOWMO`, `RECORD_DIR` (save a `.webm`), `PREVIEW_PASS` (if the
+  target is behind the shared preview gate). Headed + paced by default for
+  recording. See `scripts/demo-walk/README.md`.
+- **New this task, to make flow B walkable via UI without weakening the guard:** a
+  mock-only reviewer affordance `src/pages/api/demo/advance-screening.ts` (mirrors
+  `/api/demo/advance-dispense`; ungated `/api/demo/*`) that steps the account's mock
+  screen `kit_sent -> sample_received -> results_ready` via the SAME
+  `receiveScreeningSample` / `attachScreeningResults` orchestration a real lab
+  callback drives, then routes the screened patient to the consult lane
+  (`route=consult`). Surfaced as a fenced "Demo stand-in — Advance the screen (demo)"
+  control on `/screening` (shown only when the screen is pending + `SCREENING_IMPL=
+  mock`). It ADVANCES the screen exactly as a lab would (it does not skip the guard);
+  a clinician still decides once results are in. `playwright` added as a devDep.
+- **Proven (local dev, all demo flags on incl. `DEMO_CONSULT=true`):** both scripts
+  ran end to end, hands-free, to `delivered` + an OTC basket line (26 and 32 logged
+  steps respectively). `astro build` clean; `journey.test.ts` (hard line),
+  `demo-consult-veil.test.ts`, `screening.test.ts` (the guard) all green
+  (`RX_ISSUED_PREDECESSORS` unchanged; the guard blocks until `results_ready`).
+  `BASE_URL` defaults to the deployed demo, but the deployed target lacks the veil +
+  this affordance until James deploys; the proof was against a local dev server with
+  the flags on (which is what the deployed demo becomes on deploy). NOT pushed, NOT
+  deployed.
+
 ## Verifying
 
 Success = the functional OUTCOME on the deployed URL, not "I made an edit" and

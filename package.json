@@ -10,7 +10,9 @@
     "preview": "wrangler dev",
     "deploy": "astro build && wrangler deploy",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "demo:menopause": "node scripts/demo-walk/menopause.mjs",
+    "demo:weight": "node scripts/demo-walk/weight.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.0.1",
@@ -19,6 +21,7 @@
     "astro": "^7.0.3"
   },
   "devDependencies": {
+    "playwright": "^1.48.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "wrangler": "^4.105.0"

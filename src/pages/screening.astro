@@ -75,10 +75,26 @@ const label = (m: string) => MARKER_LABEL[m] ?? m;
                 <p class="muted small">A clinician reviews these with you. This is a baseline, not a diagnosis.</p>
               </>
             ) : (
-              <p class="notice notice-soft">
-                Your kit is on its way / with the lab (<strong>{review.status}</strong>). Your results
-                will appear here once the bloods are in.
-              </p>
+              <>
+                <p class="notice notice-soft">
+                  Your kit is on its way / with the lab (<strong>{review.status}</strong>). Your results
+                  will appear here once the bloods are in.
+                </p>
+                {env.SCREENING_IMPL === 'mock' && (
+                  <div class="demo-advance">
+                    <span class="pill pill-soft">Demo stand-in</span>
+                    <p class="muted small">
+                      In the live service the lab pushes each update. For the demo, step the
+                      screen forward: post the kit, log the sample, then release the results.
+                    </p>
+                    <form method="POST" action="/api/demo/advance-screening">
+                      <input type="hidden" name="route" value="consult" />
+                      <input type="hidden" name="return" value="/screening" />
+                      <button type="submit" class="btn btn-pri">Advance the screen (demo)</button>
+                    </form>
+                  </div>
+                )}
+              </>
             )
           }
         </div>
@@ -96,6 +112,8 @@ const label = (m: string) => MARKER_LABEL[m] ?? m;
   .panel li { color: var(--text); font-size: 15px; }
   .panel li + li { margin-top: 4px; }
   .small { font-size: 13.5px; margin-top: 14px; }
+  .demo-advance { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); }
+  .demo-advance form { margin-top: 10px; }
   .picture { margin: 4px 0 0; }
   .picture > div { display: grid; grid-template-columns: 260px 1fr; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border); }
   .picture > div:first-child { border-top: none; }
