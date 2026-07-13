@@ -269,22 +269,31 @@ export async function joinConsultVeil(page) {
 
 // ---- the reviewer console (mock clinician) -----------------------------
 
-// Read the current account id from the demo panel (used to find this patient's
-// own card in the global clinician queue).
+// Read the current account id (used to find this patient's own card in the global
+// clinician queue). Fetched from /demo via the page's request context so it does
+// NOT navigate the visible page — the /demo reviewer panel never appears in a
+// recording.
 export async function readAccountId(page) {
-  await page.goto(`${BASE_URL}/demo`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  const codes = await page.locator('code').allInnerTexts();
-  const uuid = codes.map((t) => t.trim()).find((t) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(t));
-  if (!uuid) throw new Error('Could not read the account id from /demo');
-  return uuid;
+  const html = await page.request.get(`${BASE_URL}/demo`).then((r) => r.text());
+  const m = html.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (!m) throw new Error('Could not read the account id from /demo');
+  return m[0];
 }
 
+// Switch the account's role via the demo endpoint directly (not the visible /demo
+// panel), so the reviewer scaffolding stays out of the recording. The POST shares
+// the page session cookie, so the visible page's next navigation reflects the new
+// role. An Origin header satisfies the app's CSRF check.
 export async function switchRole(page, role) {
   log(`Switch role -> ${role} (one account, two roles)`);
-  await page.goto(`${BASE_URL}/demo`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await beat(page);
-  await submitReload(page, page.getByRole('button', { name: `Switch to ${role}` }));
-  await beat(page);
+  const res = await page.request.post(`${BASE_URL}/api/demo/role`, {
+    form: { role, return: '/' },
+    headers: { origin: BASE_URL },
+  });
+  if (res.status() >= 400) {
+    throw new Error(`Role switch to ${role} failed (HTTP ${res.status()})`);
+  }
+  await beat(page, 500);
 }
 
 // As the clinician: open THIS patient's consult from the queue and Issue the
