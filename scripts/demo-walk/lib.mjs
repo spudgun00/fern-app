@@ -261,9 +261,9 @@ export async function joinConsultVeil(page) {
   await beat(page);
   log('Veil state 1: "Your video consultation is taking place" (with the booking detail)');
   await beat(page, PACE + 1200);
-  log('Advance the veil -> state 2: "Your clinician is reviewing your case"');
+  log('Advance the veil -> state 2: "Your consultation is complete" (happy to prescribe)');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByText('Your clinician is reviewing your case').waitFor({ timeout: 15000 });
+  await page.getByText('Your consultation is complete').waitFor({ timeout: 15000 });
   await beat(page, PACE + 800);
 }
 

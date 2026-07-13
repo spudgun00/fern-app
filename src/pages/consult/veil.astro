@@ -73,18 +73,18 @@ const slotLabel = view.slotAt ? new Date(view.slotAt).toLocaleString('en-GB') : 
         <p class="hint-inv">This screen advances on its own in a few moments.</p>
       </div>
 
-      <!-- State 2: the clinician is reviewing -->
+      <!-- State 2: consultation complete, prescription is the next step -->
       <div class="state" data-state="2" hidden>
         <span class="ring" aria-hidden="true"><span class="dot"></span></span>
         <p class="eyebrow-inv">Consultation complete</p>
-        <h1>Your clinician is reviewing your case</h1>
+        <h1>Your consultation is complete</h1>
         <p class="lede-inv">
-          Thank you. Your clinician is now reviewing your consultation and will make
-          a decision shortly. You do not need to stay on this screen; we will update
-          your treatment when the decision is made.
+          Your clinician has assessed you and is happy to prescribe your treatment.
+          You'll confirm and pay for your prescription next, then it is sent to the
+          pharmacy to dispense and deliver to you.
         </p>
-        <a href="/consult" class="btn-inv">Return to your consultation</a>
-        <p class="hint-inv">You are now awaiting your clinician's decision.</p>
+        <a href="/treatment" class="btn-inv">Continue to your prescription</a>
+        <p class="hint-inv">Your prescription and delivery status appear on your treatment page.</p>
       </div>
     </div>
   </div>
